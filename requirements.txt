@@ -18,6 +18,9 @@ ipykernel>=6.29
 # App / Dashboard
 streamlit>=1.40
 
+# Testing
+pytest>=8.0
+
 # Data warehouse
 sqlalchemy>=2.0
 psycopg2-binary>=2.9

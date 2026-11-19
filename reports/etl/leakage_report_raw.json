@@ -1,0 +1,111 @@
+{
+  "config": "raw",
+  "created_at": "2026-11-19T15:18:38+00:00",
+  "output": "data\\processed\\raw_masked.parquet",
+  "posts_removed": 393,
+  "users_left_without_posts": 0,
+  "seconds": 186.3,
+  "before": {
+    "users": 8675,
+    "posts": 409318,
+    "mbti_mentions_total": 129601,
+    "users_with_any_mention": 8328,
+    "users_with_any_mention_pct": 96.0,
+    "users_with_own_type": 7803,
+    "users_with_own_type_pct": 89.95,
+    "mask_tokens_total": 0,
+    "top_mentions": [
+      [
+        "infp",
+        13395
+      ],
+      [
+        "infj",
+        12313
+      ],
+      [
+        "intj",
+        11760
+      ],
+      [
+        "intp",
+        10409
+      ],
+      [
+        "enfp",
+        8712
+      ],
+      [
+        "entp",
+        7426
+      ],
+      [
+        "istj",
+        4863
+      ],
+      [
+        "istp",
+        4493
+      ],
+      [
+        "enfj",
+        4289
+      ],
+      [
+        "entj",
+        4243
+      ],
+      [
+        "isfp",
+        4153
+      ],
+      [
+        "isfj",
+        4021
+      ],
+      [
+        "infps",
+        3435
+      ],
+      [
+        "estp",
+        3232
+      ],
+      [
+        "esfj",
+        3162
+      ],
+      [
+        "intjs",
+        3048
+      ],
+      [
+        "esfp",
+        2909
+      ],
+      [
+        "infjs",
+        2861
+      ],
+      [
+        "intps",
+        2620
+      ],
+      [
+        "estj",
+        2545
+      ]
+    ]
+  },
+  "after": {
+    "users": 8675,
+    "posts": 408925,
+    "mbti_mentions_total": 0,
+    "users_with_any_mention": 0,
+    "users_with_any_mention_pct": 0.0,
+    "users_with_own_type": 0,
+    "users_with_own_type_pct": 0.0,
+    "mask_tokens_total": 129093,
+    "top_mentions": []
+  }
+}

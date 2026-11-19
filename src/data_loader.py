@@ -49,3 +49,17 @@ def load_mbti(config: str = "label_clean", force_download: bool = False) -> pd.D
     RAW_DIR.mkdir(parents=True, exist_ok=True)
     df.to_parquet(cache, index=False)
     return df
+
+
+def load_clean(config: str = "label_clean") -> pd.DataFrame:
+    """Return the leakage-masked dataset produced by ``src.etl.clean_leakage``.
+
+    This is the version models should be trained on. If the processed file
+    does not exist yet, the ETL step is run first.
+    """
+    path = PROJECT_ROOT / "data" / "processed" / f"{config}_masked.parquet"
+    if not path.exists():
+        from src.etl.clean_leakage import run  # avoid a circular import at module load
+
+        run(config)
+    return pd.read_parquet(path)

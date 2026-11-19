@@ -1,0 +1,111 @@
+{
+  "config": "psychometric_clean",
+  "created_at": "2026-11-19T15:25:11+00:00",
+  "output": "data\\processed\\psychometric_clean_masked.parquet",
+  "posts_removed": 34,
+  "users_left_without_posts": 0,
+  "seconds": 208.8,
+  "before": {
+    "users": 8675,
+    "posts": 408944,
+    "mbti_mentions_total": 23597,
+    "users_with_any_mention": 5599,
+    "users_with_any_mention_pct": 64.54,
+    "users_with_own_type": 4245,
+    "users_with_own_type_pct": 48.93,
+    "mask_tokens_total": 105736,
+    "top_mentions": [
+      [
+        "infps",
+        3435
+      ],
+      [
+        "intjs",
+        3048
+      ],
+      [
+        "infjs",
+        2861
+      ],
+      [
+        "intps",
+        2620
+      ],
+      [
+        "enfps",
+        1990
+      ],
+      [
+        "entps",
+        1902
+      ],
+      [
+        "entjs",
+        914
+      ],
+      [
+        "enfjs",
+        863
+      ],
+      [
+        "istps",
+        817
+      ],
+      [
+        "istjs",
+        695
+      ],
+      [
+        "isfps",
+        626
+      ],
+      [
+        "esfjs",
+        563
+      ],
+      [
+        "isfjs",
+        540
+      ],
+      [
+        "estps",
+        529
+      ],
+      [
+        "estjs",
+        361
+      ],
+      [
+        "esfps",
+        323
+      ],
+      [
+        "xnfps",
+        44
+      ],
+      [
+        "xntjs",
+        41
+      ],
+      [
+        "infpness",
+        40
+      ],
+      [
+        "infpish",
+        38
+      ]
+    ]
+  },
+  "after": {
+    "users": 8675,
+    "posts": 408910,
+    "mbti_mentions_total": 0,
+    "users_with_any_mention": 0,
+    "users_with_any_mention_pct": 0.0,
+    "users_with_own_type": 0,
+    "users_with_own_type_pct": 0.0,
+    "mask_tokens_total": 129277,
+    "top_mentions": []
+  }
+}
