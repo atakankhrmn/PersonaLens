@@ -184,6 +184,8 @@ tests/             pytest
 - Don't commit data, models, `.venv/` or secrets (`.env`, `.streamlit/secrets.toml`).
 - Don't store users' app input beyond what is needed (privacy).
 - Work on feature branches (`feature/etl`, `feature/model`, `feature/app`,
-  `feature/dashboard`) and merge to `main` via pull requests.
+  `feature/dashboard`) and merge to `main` via pull requests. **`main` is protected on
+  GitHub: direct pushes (also by admins) and force pushes are rejected**, so always push a
+  branch and open a PR (`gh pr create`). Start new work from an up-to-date `main` (`git pull`).
 - **Update the status table (see "Mandatory: keep this table up to date") in every commit
   that finishes or starts a step.**
