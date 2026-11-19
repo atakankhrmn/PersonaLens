@@ -26,8 +26,8 @@ the app must show cautious wording and a "not enough text" warning.
 | Project skeleton, requirements, data loader | ✅ done |
 | EDA notebook (`notebooks/01_eda.ipynb`) | ✅ done |
 | Cleaning / leakage ETL (`src/etl/`) + 70 tests | ✅ done |
-| Baseline models (4 binary classifiers) | ⏳ next |
-| PostgreSQL star schema + DW load | ⏳ next |
+| Baseline models (4 binary classifiers) | ⏳ next — team will do it together |
+| PostgreSQL star schema + DW load | ✅ done — `src/dw/` (schema.sql, load_dw.py, predictions.py), 3 sources / 1.22M posts loaded, 15 tests |
 | Streamlit app | ⏳ not started |
 | BI dashboard | ⏳ not started |
 
@@ -57,10 +57,40 @@ pip install -r requirements.txt
 python -m pytest                                  # run tests (must stay green)
 python -m src.etl.clean_leakage                   # build main training data (~2–4 min)
 python -m src.etl.clean_leakage --config all      # all three configs
+python -m src.dw.load_dw --config all             # load warehouse (~20 s per source)
 ```
 
 Always use the project `.venv` interpreter. In VS Code the Jupyter extension is required
 and the notebook kernel must be `.venv` (not the global Python, which lacks the packages).
+
+## Data warehouse (src/dw/)
+
+PostgreSQL 17, database `personalens`, schema `dw`. Connection string: `DATABASE_URL` in the
+git-ignored `.env` (template: `.env.example`). **Never print or commit the password.**
+On Turkish Windows PostgreSQL must be initialised with locale `C` (installer `--locale C`),
+otherwise `initdb` fails on "Turkish_Türkiye.1254".
+
+- `schema.sql` — idempotent DDL: `dim_mbti_type`, `dim_user`, `dim_source`, `dim_date`
+  (2020–2035), `dim_model`, `dim_etl_run`; facts `fact_post` (grain: one cleaned post, keeps
+  `post_text`), `fact_prediction` (user × model; `user_key` NULL for app requests),
+  `fact_data_quality` (ETL run × metric); BI views `vw_*`.
+- `load_dw.py` — `python -m src.dw.load_dw [--config all] [--sample N]`. Upserts dimensions,
+  replaces that source's `fact_post` rows, appends quality metrics from
+  `reports/etl/leakage_report_<config>.json`, records the run in `dim_etl_run`. One
+  transaction; safe to re-run; never touches `fact_prediction`.
+- `predictions.py` — the ML/app contract for writing results:
+  `register_model(engine, name, version, algorithm=, params=, metrics=) -> model_key`,
+  `write_predictions(engine, model_key, preds)` (`preds`: `user_id`, `predicted_type`,
+  `score_e/n/t/j` = probability of E, N, T, J; true type and split come from `dim_user`;
+  replaces earlier rows of the same model+users), `log_app_prediction(...)` (app; never
+  stores the user's text).
+- The dataset has no post timestamps: never invent dates; `dim_date` is only for load and
+  prediction dates.
+- Main source code: `personalitycafe/psychometric_clean+leak_masked`.
+- `tests/test_dw.py` integration tests use a throw-away `personalens_test` database and are
+  skipped when PostgreSQL is not reachable.
+- Schema changes: edit `schema.sql` with `IF NOT EXISTS` / `CREATE OR REPLACE`; for a column
+  change on an existing table, drop the `dw` schema (`DROP SCHEMA dw CASCADE`) and reload.
 
 ## Data — the most important rules
 
@@ -142,6 +172,7 @@ notebooks/         01_eda.ipynb
 reports/etl/       ETL data-quality reports     reports/figures/ EDA charts
 src/data_loader.py load_mbti(), load_clean()
 src/etl/           cleaning.py (rules), clean_leakage.py (ETL step)
+src/dw/            schema.sql, db.py (engine/.env), load_dw.py (DW load), predictions.py
 src/models/        training / evaluation code (empty)
 tests/             pytest
 ```
