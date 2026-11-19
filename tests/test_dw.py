@@ -141,8 +141,8 @@ def loaded(test_engine, monkeypatch_module):
 
     users = _users()
     monkeypatch_module.setattr(load_dw, "load_clean", lambda config: users)
-    first = load_dw.load(test_engine, "psychometric_clean")
-    second = load_dw.load(test_engine, "psychometric_clean")  # re-run must be idempotent
+    first = load_dw.load(test_engine, "label_clean")
+    second = load_dw.load(test_engine, "label_clean")  # re-run must be idempotent
     return test_engine, first, second
 
 
@@ -202,3 +202,14 @@ def test_predictions_roundtrip(loaded):
 
     with pytest.raises(ValueError):
         write_predictions(engine, key, pd.DataFrame({"user_id": ["nobody"], "predicted_type": ["INTP"]}))
+
+
+def test_quality_only_load_keeps_posts(loaded):
+    from src.dw import load_dw
+
+    engine, *_ = loaded
+    result = load_dw.load(engine, "raw", posts=False)  # uses reports/etl/leakage_report_raw.json
+    assert result["posts"] == 0
+    assert _scalar(engine, "SELECT COUNT(*) FROM dw.fact_post") == 3  # main posts untouched
+    assert _scalar(engine, "SELECT COUNT(DISTINCT source_key) FROM dw.fact_post") == 1
+    assert _scalar(engine, """SELECT COUNT(DISTINCT source_code) FROM dw.vw_data_quality_latest""") == 2

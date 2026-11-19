@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS dim_user (
 -- Where the text comes from and how it was cleaned.
 CREATE TABLE IF NOT EXISTS dim_source (
     source_key      SMALLINT    GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    source_code     VARCHAR(64) NOT NULL UNIQUE,      -- e.g. 'personalitycafe/psychometric_clean+leak_masked'
+    source_code     VARCHAR(64) NOT NULL UNIQUE,      -- e.g. 'personalitycafe/label_clean+leak_masked'
     platform        VARCHAR(40) NOT NULL,             -- 'PersonalityCafe forum', 'PersonaLens app'
     dataset_name    VARCHAR(120),
     dataset_config  VARCHAR(40),                      -- raw / label_clean / psychometric_clean

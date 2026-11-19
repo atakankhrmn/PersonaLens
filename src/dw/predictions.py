@@ -29,6 +29,7 @@ from datetime import datetime, timezone
 import pandas as pd
 from sqlalchemy import Engine
 
+from src.data_loader import MAIN_CONFIG
 from src.dw.load_dw import LABEL_ORDER, source_code
 
 SCORE_COLS = ["score_e", "score_n", "score_t", "score_j"]
@@ -50,7 +51,7 @@ def register_model(
     trained_at: datetime | None = None,
 ) -> int:
     """Insert or update a model in ``dw.dim_model`` and return its ``model_key``."""
-    training_source = training_source or source_code("psychometric_clean")
+    training_source = training_source or source_code(MAIN_CONFIG)
     raw = engine.raw_connection()
     try:
         with raw.cursor() as cur:
@@ -101,7 +102,7 @@ def write_predictions(
     are deleted first, so re-running an experiment does not duplicate rows.
     """
     preds = _validate(preds)
-    source = source or source_code("psychometric_clean")
+    source = source or source_code(MAIN_CONFIG)
     raw = engine.raw_connection()
     try:
         with raw.cursor() as cur:

@@ -18,6 +18,11 @@ import pandas as pd
 DATASET_ID = "Lazanantenaina/personalitycafe-mbti-preprocessed"
 CONFIGS = ("raw", "label_clean", "psychometric_clean")
 
+# The main training set is HF label_clean + our cleaning (src/etl/cleaning.py).
+# Our rules already mask everything psychometric_clean adds (MBTI terms, cognitive
+# functions) without its false positives ("Sci-Fi" -> "Sci-<COGNITIVE_FUNCTION>").
+MAIN_CONFIG = "label_clean"
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RAW_DIR = PROJECT_ROOT / "data" / "raw"
 
@@ -51,10 +56,10 @@ def load_mbti(config: str = "label_clean", force_download: bool = False) -> pd.D
     return df
 
 
-def load_clean(config: str = "psychometric_clean") -> pd.DataFrame:
+def load_clean(config: str = MAIN_CONFIG) -> pd.DataFrame:
     """Return the cleaned, leakage-masked dataset from ``src.etl.clean_leakage``.
 
-    The default ``psychometric_clean`` + our masking is the main training set.
+    The default (``MAIN_CONFIG`` = ``label_clean`` + our cleaning) is the main training set.
     If the processed file does not exist yet, the ETL step is run first.
     """
     path = PROJECT_ROOT / "data" / "processed" / f"{config}_masked.parquet"

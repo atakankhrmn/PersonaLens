@@ -46,6 +46,12 @@ from src.etl.cleaning import (
         ("xNTPs unite", f"{MASK} unite"),
         ("an IxxJ maybe", f"an {MASK} maybe"),
         ("So E_TJ!", f"So {MASK}!"),
+        # three wildcards still reveal one letter
+        ("many Ixxx friends", f"many {MASK} friends"),
+        ("Michael xxFx", f"Michael {MASK}"),
+        ("made for xxxJ's", f"made for {MASK}'s"),
+        ("all the XXXJs?", f"all the {MASK}?"),
+        ("my E___ sister", f"my {MASK} sister"),
         # existing masks are kept
         (f"{MASK} and {MASK}", f"{MASK} and {MASK}"),
     ],
@@ -100,6 +106,8 @@ def test_masks_typology_terms(text, expected):
     [
         "I enjoy exploring new ideas and thinking about the future.",
         "xxxxx censored",
+        "an XXXX type",  # reveals nothing
+        "Exxxcellent! I'm feeling exxxxcellent",
         "I am an introvert and I like intuition",
         "existence is strange, next time",
         "I N the middle",  # not a full spaced type

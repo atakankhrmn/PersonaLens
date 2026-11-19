@@ -26,7 +26,8 @@ It does three things, in this order:
    * Enneagram ``4w5``, ``cp6w7`` and stackings ``sx/so``     → ``<TYPOLOGY_TERM>``
 
 The placeholder names match the ones used by the Hugging Face
-``psychometric_clean`` configuration.
+``psychometric_clean`` configuration; our rules mask the same vocabulary, so
+the main training set (HF ``label_clean`` + this cleaning) needs no extra HF pass.
 """
 
 from __future__ import annotations
@@ -93,14 +94,20 @@ _SPACED_TYPE = re.compile(
     re.IGNORECASE,
 )
 
-# Wildcards: x or _ in place of 1–2 letters ("INxJ", "xNTPs", "E_TJ").
+# Wildcards: x or _ in place of 1–3 letters ("INxJ", "xNTPs", "E_TJ", "Ixxx", "xxFx").
 _WILDCARD_CANDIDATE = re.compile(r"\b[IEX][NSX_][TFX_][JPX_]\w*", re.IGNORECASE)
 
 
 def _is_wildcard_code(word: str) -> bool:
+    """1–2 wildcards: always a type ("INxJ", "IxxJs"). 3 wildcards still reveal one
+    letter ("Ixxx", "xxFx") but only count as a type when the word is just the code
+    (+ plural "s"), so stretched words like "Exxxcellent" are left alone.
+    "xxxx" reveals nothing and is never masked."""
     code = word[:4].upper()
     n_wild = code.count("X") + code.count("_")
-    return 1 <= n_wild <= 2
+    if 1 <= n_wild <= 2:
+        return True
+    return n_wild == 3 and word[4:].lower() in ("", "s")
 
 
 def _mask_wildcard(m: re.Match) -> str:

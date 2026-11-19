@@ -1,6 +1,6 @@
 """ETL step: clean the dataset and remove MBTI label leakage.
 
-Extract   – load a dataset configuration (default: ``psychometric_clean``)
+Extract   – load a dataset configuration (default: ``label_clean`` = MAIN_CONFIG)
 Transform – per post: fix encoding artefacts and mask every typology mention
             (see ``src/etl/cleaning.py``), drop empty / placeholder-only posts
             and duplicates; across users: drop copied templates (questionnaires,
@@ -11,8 +11,8 @@ Load      – write ``data/processed/<config>_masked.parquet`` and a data-qualit
 
 Run from the project root:
 
-    python -m src.etl.clean_leakage                       # psychometric_clean
-    python -m src.etl.clean_leakage --config label_clean
+    python -m src.etl.clean_leakage                       # label_clean (main)
+    python -m src.etl.clean_leakage --config psychometric_clean
     python -m src.etl.clean_leakage --config all
 """
 
@@ -27,13 +27,13 @@ from datetime import datetime, timezone
 
 import pandas as pd
 
-from src.data_loader import CONFIGS, PROJECT_ROOT, load_mbti
+from src.data_loader import CONFIGS, MAIN_CONFIG, PROJECT_ROOT, load_mbti
 from src.etl.cleaning import RULES, _ENCODING_FIXES, clean_posts, find_leaks
 
 PROCESSED_DIR = PROJECT_ROOT / "data" / "processed"
 REPORT_DIR = PROJECT_ROOT / "reports" / "etl"
 
-DEFAULT_CONFIG = "psychometric_clean"
+DEFAULT_CONFIG = MAIN_CONFIG
 POST_SEP = " <POST_SEP> "
 
 # A post is treated as a copied template if at least this many users posted

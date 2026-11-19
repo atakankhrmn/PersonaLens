@@ -4,16 +4,16 @@ Extract   – cleaned data from ``load_clean(config)`` and the data-quality repo
             ``reports/etl/leakage_report_<config>.json``
 Transform – build dimension rows (types, users, source) and one fact row per post
             with its measures (words, characters, URLs, masks, truncation)
-Load      – upsert dimensions, replace this source's posts in ``dw.fact_post``,
+Load      – upsert dimensions, replace ``dw.fact_post`` with this source's posts,
             append data-quality metrics, record the run in ``dw.dim_etl_run``
 
-Re-running is safe: dimensions are upserted and the source's posts are replaced
+Re-running is safe: dimensions are upserted and ``fact_post`` is replaced
 in one transaction. Model predictions (``fact_prediction``) are never touched.
 
 Run from the project root (PostgreSQL must be running, see README):
 
-    python -m src.dw.load_dw                       # main source: psychometric_clean
-    python -m src.dw.load_dw --config all          # all three cleaned configs
+    python -m src.dw.load_dw                       # main (label_clean) posts + quality of all configs
+    python -m src.dw.load_dw --config raw          # experiment: put another config's posts in fact_post
     python -m src.dw.load_dw --sample 200          # quick test with 200 users
 """
 
@@ -29,7 +29,7 @@ from datetime import datetime, timezone
 import pandas as pd
 from sqlalchemy import Engine
 
-from src.data_loader import CONFIGS, PROJECT_ROOT, load_clean
+from src.data_loader import CONFIGS, MAIN_CONFIG, PROJECT_ROOT, load_clean
 from src.dw.db import apply_schema, get_engine
 
 REPORT_DIR = PROJECT_ROOT / "reports" / "etl"
@@ -149,25 +149,38 @@ def _git_commit() -> str | None:
         return None
 
 
-def load(engine: Engine, config: str, sample: int | None = None) -> dict:
+def load(engine: Engine, config: str, sample: int | None = None, posts: bool = True) -> dict:
+    """Load one cleaned config.
+
+    ``posts=True``  : users + posts + quality metrics. ``fact_post`` holds exactly one
+                      source, so posts of any other source are removed.
+    ``posts=False`` : only the source, the run and its quality metrics (used to keep
+                      the before/after numbers of the comparison configs).
+    """
     start = time.perf_counter()
     started_at = datetime.now(timezone.utc)
     date_key = int(started_at.strftime("%Y%m%d"))
 
-    print(f"[{config}] extract ...")
-    df = load_clean(config)
-    if sample:
-        df = df.sample(n=min(sample, len(df)), random_state=42)
-    check_label_mapping(df)
     report_path = REPORT_DIR / f"leakage_report_{config}.json"
     report = json.loads(report_path.read_text(encoding="utf-8")) if report_path.exists() else None
-
-    print(f"[{config}] transform ...")
     dim_type = build_dim_mbti_type()
-    dim_user = build_dim_user(df)
-    posts = build_fact_post(df)
 
-    print(f"[{config}] load {len(dim_user)} users, {len(posts)} posts ...")
+    if posts:
+        print(f"[{config}] extract ...")
+        df = load_clean(config)
+        if sample:
+            df = df.sample(n=min(sample, len(df)), random_state=42)
+        check_label_mapping(df)
+        print(f"[{config}] transform ...")
+        dim_user = build_dim_user(df)
+        post_rows = build_fact_post(df)
+        print(f"[{config}] load {len(dim_user)} users, {len(post_rows)} posts ...")
+    else:
+        if report is None:
+            raise FileNotFoundError(f"No quality report {report_path}; run src.etl.clean_leakage first")
+        dim_user = post_rows = None
+        print(f"[{config}] load quality metrics only ...")
+
     apply_schema(engine)
     raw = engine.raw_connection()
     try:
@@ -202,36 +215,38 @@ def load(engine: Engine, config: str, sample: int | None = None) -> dict:
             """, (started_at, date_key, source_key, _git_commit()))
             run_key = cur.fetchone()[0]
 
-            # dim_user (upsert by user_id)
-            cur.execute("""CREATE TEMP TABLE stg_user (user_id VARCHAR(32), split VARCHAR(10),
-                           self_reported_type CHAR(4)) ON COMMIT DROP""")
-            _copy(cur, dim_user, "stg_user")
-            cur.execute("""
-                INSERT INTO dim_user (user_id, split, self_reported_type)
-                SELECT user_id, split, self_reported_type FROM stg_user
-                ON CONFLICT (user_id) DO UPDATE SET
-                    split = EXCLUDED.split, self_reported_type = EXCLUDED.self_reported_type
-            """)
+            n_loaded = 0
+            if posts:
+                # dim_user (upsert by user_id)
+                cur.execute("""CREATE TEMP TABLE stg_user (user_id VARCHAR(32), split VARCHAR(10),
+                               self_reported_type CHAR(4)) ON COMMIT DROP""")
+                _copy(cur, dim_user, "stg_user")
+                cur.execute("""
+                    INSERT INTO dim_user (user_id, split, self_reported_type)
+                    SELECT user_id, split, self_reported_type FROM stg_user
+                    ON CONFLICT (user_id) DO UPDATE SET
+                        split = EXCLUDED.split, self_reported_type = EXCLUDED.self_reported_type
+                """)
 
-            # fact_post: replace this source's posts
-            cur.execute("DELETE FROM fact_post WHERE source_key = %s", (source_key,))
-            cur.execute("""CREATE TEMP TABLE stg_post (user_id VARCHAR(32), type_code CHAR(4),
-                           post_seq SMALLINT, char_count INT, word_count INT, url_count SMALLINT,
-                           mbti_type_masks SMALLINT, typology_masks SMALLINT,
-                           is_truncated BOOLEAN, post_text TEXT) ON COMMIT DROP""")
-            _copy(cur, posts, "stg_post")
-            cur.execute("""
-                INSERT INTO fact_post (user_key, type_key, source_key, etl_run_key, load_date_key,
-                                       post_seq, char_count, word_count, url_count,
-                                       mbti_type_masks, typology_masks, is_truncated, post_text)
-                SELECT u.user_key, t.type_key, %s, %s, %s,
-                       s.post_seq, s.char_count, s.word_count, s.url_count,
-                       s.mbti_type_masks, s.typology_masks, s.is_truncated, s.post_text
-                FROM stg_post s
-                JOIN dim_user u      ON u.user_id = s.user_id
-                JOIN dim_mbti_type t ON t.type_code = s.type_code
-            """, (source_key, run_key, date_key))
-            n_loaded = cur.rowcount
+                # fact_post holds exactly one source: replace everything
+                cur.execute("TRUNCATE fact_post")
+                cur.execute("""CREATE TEMP TABLE stg_post (user_id VARCHAR(32), type_code CHAR(4),
+                               post_seq SMALLINT, char_count INT, word_count INT, url_count SMALLINT,
+                               mbti_type_masks SMALLINT, typology_masks SMALLINT,
+                               is_truncated BOOLEAN, post_text TEXT) ON COMMIT DROP""")
+                _copy(cur, post_rows, "stg_post")
+                cur.execute("""
+                    INSERT INTO fact_post (user_key, type_key, source_key, etl_run_key, load_date_key,
+                                           post_seq, char_count, word_count, url_count,
+                                           mbti_type_masks, typology_masks, is_truncated, post_text)
+                    SELECT u.user_key, t.type_key, %s, %s, %s,
+                           s.post_seq, s.char_count, s.word_count, s.url_count,
+                           s.mbti_type_masks, s.typology_masks, s.is_truncated, s.post_text
+                    FROM stg_post s
+                    JOIN dim_user u      ON u.user_id = s.user_id
+                    JOIN dim_mbti_type t ON t.type_code = s.type_code
+                """, (source_key, run_key, date_key))
+                n_loaded = cur.rowcount
 
             # fact_data_quality
             if report is not None:
@@ -250,11 +265,11 @@ def load(engine: Engine, config: str, sample: int | None = None) -> dict:
     finally:
         raw.close()
 
-    if n_loaded != len(posts):
-        raise RuntimeError(f"Loaded {n_loaded} posts but expected {len(posts)}")
+    if posts and n_loaded != len(post_rows):
+        raise RuntimeError(f"Loaded {n_loaded} posts but expected {len(post_rows)}")
 
     result = {"config": config, "etl_run_key": run_key, "source_key": source_key,
-              "users": len(dim_user), "posts": n_loaded,
+              "users": len(dim_user) if posts else 0, "posts": n_loaded,
               "quality_metrics": 0 if report is None else len(build_quality_rows(report)),
               "seconds": round(time.perf_counter() - start, 1)}
     print(f"[{config}] done: {result}")
@@ -263,12 +278,16 @@ def load(engine: Engine, config: str, sample: int | None = None) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--config", default="psychometric_clean", choices=[*CONFIGS, "all"])
+    parser.add_argument("--config", default=MAIN_CONFIG, choices=CONFIGS,
+                        help="config whose posts go into fact_post (default: main training set)")
     parser.add_argument("--sample", type=int, default=None, help="load only N random users (for testing)")
     args = parser.parse_args()
     engine = get_engine()
-    for config in CONFIGS if args.config == "all" else [args.config]:
-        load(engine, config, sample=args.sample)
+    load(engine, args.config, sample=args.sample)
+    # before/after quality metrics of the other configs, for comparison in the dashboard
+    for config in CONFIGS:
+        if config != args.config and (REPORT_DIR / f"leakage_report_{config}.json").exists():
+            load(engine, config, posts=False)
 
 
 if __name__ == "__main__":

@@ -27,7 +27,7 @@ the app must show cautious wording and a "not enough text" warning.
 | EDA notebook (`notebooks/01_eda.ipynb`) | ✅ done |
 | Cleaning / leakage ETL (`src/etl/`) + 70 tests | ✅ done |
 | Baseline models (4 binary classifiers) | ⏳ next — team will do it together |
-| PostgreSQL star schema + DW load | ✅ done — `src/dw/` (schema.sql, load_dw.py, predictions.py), 3 sources / 1.22M posts loaded, 15 tests |
+| PostgreSQL star schema + DW load | ✅ done — `src/dw/` (schema.sql, load_dw.py, predictions.py), main source (label_clean) posts + quality metrics of all 3 configs, 16 tests |
 | Streamlit app | ⏳ not started |
 | BI dashboard | ⏳ not started |
 
@@ -56,8 +56,8 @@ pip install -r requirements.txt
 
 python -m pytest                                  # run tests (must stay green)
 python -m src.etl.clean_leakage                   # build main training data (~2–4 min)
-python -m src.etl.clean_leakage --config all      # all three configs
-python -m src.dw.load_dw --config all             # load warehouse (~20 s per source)
+python -m src.etl.clean_leakage --config all      # all three configs (quality reports)
+python -m src.dw.load_dw                          # load warehouse (~30 s)
 ```
 
 Always use the project `.venv` interpreter. In VS Code the Jupyter extension is required
@@ -74,8 +74,10 @@ otherwise `initdb` fails on "Turkish_Türkiye.1254".
   (2020–2035), `dim_model`, `dim_etl_run`; facts `fact_post` (grain: one cleaned post, keeps
   `post_text`), `fact_prediction` (user × model; `user_key` NULL for app requests),
   `fact_data_quality` (ETL run × metric); BI views `vw_*`.
-- `load_dw.py` — `python -m src.dw.load_dw [--config all] [--sample N]`. Upserts dimensions,
-  replaces that source's `fact_post` rows, appends quality metrics from
+- `load_dw.py` — `python -m src.dw.load_dw [--config X] [--sample N]`. Upserts dimensions,
+  replaces `fact_post` with the posts of ONE source (default: main `label_clean`; the three
+  cleaned configs are 98–99.7% identical, so storing all would only triple the table), and
+  appends quality metrics of all three configs from
   `reports/etl/leakage_report_<config>.json`, records the run in `dim_etl_run`. One
   transaction; safe to re-run; never touches `fact_prediction`.
 - `predictions.py` — the ML/app contract for writing results:
@@ -86,7 +88,7 @@ otherwise `initdb` fails on "Turkish_Türkiye.1254".
   stores the user's text).
 - The dataset has no post timestamps: never invent dates; `dim_date` is only for load and
   prediction dates.
-- Main source code: `personalitycafe/psychometric_clean+leak_masked`.
+- Main source code: `personalitycafe/label_clean+leak_masked`.
 - `tests/test_dw.py` integration tests use a throw-away `personalens_test` database and are
   skipped when PostgreSQL is not reachable.
 - Schema changes: edit `schema.sql` with `IF NOT EXISTS` / `CREATE OR REPLACE`; for a column
@@ -104,12 +106,15 @@ Configs: `raw` (no masking), `label_clean` (exact MBTI codes masked), `psychomet
 
 ```python
 from src.data_loader import load_clean
-df = load_clean()          # = data/processed/psychometric_clean_masked.parquet
+df = load_clean()          # = data/processed/label_clean_masked.parquet
 train = df[df["split"] == "train"]
 ```
 
-- `load_clean()` defaults to `psychometric_clean` + our cleaning. This is the main dataset.
-  `load_clean("label_clean")` / `load_clean("raw")` exist only for comparison experiments.
+- `load_clean()` defaults to `MAIN_CONFIG` = HF `label_clean` + our cleaning. This is the main
+  dataset. Our rules already mask everything `psychometric_clean` adds (MBTI terms, cognitive
+  functions), and HF's `psychometric_clean` wrongly masks `Sci-Fi`/`Wi-Fi`/`Hi-Fi`, so
+  `label_clean` is the cleaner base. `load_clean("psychometric_clean")` / `load_clean("raw")`
+  exist only for comparison experiments.
 - Do **not** train on `load_mbti(...)` (raw HF data): even `psychometric_clean` still
   leaks the label for 75.9% of users (e.g. `INFPs`, `NT`, `4w5`).
 - Use the given `split` column (train 5,205 / validation 1,735 / test 1,735 users,
@@ -130,7 +135,7 @@ It fixes encoding artefacts (`isnx92t` → `isn't`, `x93`/`x94` → quotes, `x95
 
 | Placeholder | Covers |
 |---|---|
-| `<MBTI_TYPE>` | full types in any form (`INFPs`, `mrinfj`, `I.N.F.J`, `INxJ`, `E_TJ`), partial codes (`NFP`, `NTJ`), temperaments (`NT`, `NF`, `SJ`, `SP`) |
+| `<MBTI_TYPE>` | full types in any form (`INFPs`, `mrinfj`, `I.N.F.J`, `INxJ`, `E_TJ`, and with 3 wildcards `Ixxx`, `xxFx` when the word is only the code; `xxxx`/`Exxxcellent` untouched), partial codes (`NFP`, `NTJ`), temperaments (`NT`, `NF`, `SJ`, `SP`) |
 | `<MBTI_TERM>` | `MBTI` (also glued), `Myers-Briggs`, `cognitive function(s)` |
 | `<COGNITIVE_FUNCTION>` | `Fi`, `Ne-dom`, `NeTi` … (case-sensitive) |
 | `<TYPOLOGY_TERM>` | Socionics (`LII`, `SEE-Fi`), Enneagram (`4w5`, `cp6w7`), stackings (`sx/so`) |

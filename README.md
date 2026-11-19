@@ -69,7 +69,7 @@ Even the strictest Hugging Face config still leaks the label. Our ETL step
 | What | Examples | Replaced by |
 |---|---|---|
 | Encoding artefacts | `isnx92t`, `x93quotex94`, `u200b` | `isn't`, `"quote"`, `` |
-| MBTI types in any form | `INFPs`, `mrinfj`, `I.N.F.J`, `INxJ`, `E_TJ` | `<MBTI_TYPE>` |
+| MBTI types in any form | `INFPs`, `mrinfj`, `I.N.F.J`, `INxJ`, `E_TJ`, `Ixxx`, `xxFx` | `<MBTI_TYPE>` |
 | Partial codes & temperaments | `NFPs`, `NTJ`, `NT`, `SJs` | `<MBTI_TYPE>` |
 | MBTI system words | `MBTI`, `Myers-Briggs`, `cognitive functions` | `<MBTI_TERM>` |
 | Cognitive functions | `Fi`, `Ne-dom`, `NeTi` | `<COGNITIVE_FUNCTION>` |
@@ -81,7 +81,7 @@ Deliberately **kept**: words like *introvert*, *thinking*, *feeling* (genuine la
 "extrovert" users are only 25.7% E vs. a 23% base rate), stop words, and truncated posts.
 
 ```powershell
-python -m src.etl.clean_leakage                 # psychometric_clean (default, main training set)
+python -m src.etl.clean_leakage                 # label_clean (default, main training set)
 python -m src.etl.clean_leakage --config all    # raw, label_clean, psychometric_clean
 ```
 
@@ -93,8 +93,12 @@ Results (users with any leak / with their **own** type in the text):
 | Config | before | after |
 |---|---:|---:|
 | `raw` | 96.7% / 90.0% | 0% / 0% |
-| `label_clean` | 84.5% / 48.9% | 0% / 0% |
-| `psychometric_clean` (main) | 75.9% / 48.9% | 0% / 0% |
+| `label_clean` (main) | 84.5% / 48.9% | 0% / 0% |
+| `psychometric_clean` | 75.9% / 48.9% | 0% / 0% |
+
+Why `label_clean` is the main base: after our cleaning the three configs are 98–99.7%
+identical; the only difference to `psychometric_clean` is that HF wrongly masks
+`Sci-Fi`/`Wi-Fi`/`Hi-Fi` there, while our rules already cover its extra masking.
 
 All 8,675 users are kept; ~2,150 of ~409k posts (0.5%) are dropped and 2,187 encoding
 artefacts are fixed. An independent check with different regexes finds no remaining
@@ -108,8 +112,8 @@ Run the tests with `python -m pytest`. The Streamlit app must call the same
 ```python
 from src.data_loader import load_clean, load_mbti
 
-df = load_clean()                # psychometric_clean + our cleaning → use this for models
-lc = load_clean("label_clean")   # same cleaning on label_clean, for comparison
+df = load_clean()                # label_clean + our cleaning → use this for models
+pc = load_clean("psychometric_clean")  # same cleaning on another HF config, for comparison
 raw = load_mbti("raw")           # original HF configs, e.g. for EDA
 train = df[df["split"] == "train"]
 ```
@@ -137,7 +141,7 @@ erDiagram
 
 | Table | Grain / content | Rows now |
 |---|---|---:|
-| `fact_post` | one cleaned post: words, chars, URLs, masks, truncated flag, cleaned text | 1,220,386 (3 sources) |
+| `fact_post` | one cleaned post: words, chars, URLs, masks, truncated flag, cleaned text | 406,793 (main source only) |
 | `fact_prediction` | one model prediction per user (or per app request, text not stored) | 0 (filled by ML step) |
 | `fact_data_quality` | one ETL run × quality metric (leaks, artefacts, removed posts) | 87 |
 | `dim_user` | anonymous user, split, self-reported type | 8,675 |
@@ -160,7 +164,7 @@ BI views: `vw_type_distribution`, `vw_dimension_distribution`, `vw_user_profile`
 
 ```powershell
 python -m src.etl.clean_leakage --config all   # if data/processed/ is empty
-python -m src.dw.load_dw --config all          # ~20 s per source, safe to re-run
+python -m src.dw.load_dw                       # ~30 s, safe to re-run
 ```
 
 Browse the tables with pgAdmin 4 (installed with PostgreSQL) or connect Power BI to
