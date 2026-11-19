@@ -51,11 +51,11 @@ def load_mbti(config: str = "label_clean", force_download: bool = False) -> pd.D
     return df
 
 
-def load_clean(config: str = "label_clean") -> pd.DataFrame:
-    """Return the leakage-masked dataset produced by ``src.etl.clean_leakage``.
+def load_clean(config: str = "psychometric_clean") -> pd.DataFrame:
+    """Return the cleaned, leakage-masked dataset from ``src.etl.clean_leakage``.
 
-    This is the version models should be trained on. If the processed file
-    does not exist yet, the ETL step is run first.
+    The default ``psychometric_clean`` + our masking is the main training set.
+    If the processed file does not exist yet, the ETL step is run first.
     """
     path = PROJECT_ROOT / "data" / "processed" / f"{config}_masked.parquet"
     if not path.exists():

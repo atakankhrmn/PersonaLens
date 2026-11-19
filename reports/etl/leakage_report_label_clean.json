@@ -1,111 +1,213 @@
 {
   "config": "label_clean",
-  "created_at": "2026-11-19T15:21:42+00:00",
-  "output": "data\\processed\\label_clean_masked.parquet",
-  "posts_removed": 34,
+  "created_at": "2026-11-19T16:18:27+00:00",
+  "output": "data/processed/label_clean_masked.parquet",
+  "posts_removed_by_post_cleaning": 1973,
+  "template_texts_found": 27,
+  "posts_removed_as_templates": 192,
   "users_left_without_posts": 0,
-  "seconds": 184.1,
+  "seconds": 185.1,
   "before": {
     "users": 8675,
     "posts": 408959,
-    "mbti_mentions_total": 23597,
-    "users_with_any_mention": 5599,
-    "users_with_any_mention_pct": 64.54,
-    "users_with_own_type": 4245,
+    "leak_mentions_total": 74659,
+    "users_with_any_leak_pct": 84.46,
     "users_with_own_type_pct": 48.93,
-    "mask_tokens_total": 105736,
+    "encoding_artefacts": 2187,
+    "by_rule": {
+      "type_full": {
+        "mentions": 22883,
+        "users_pct": 64.06
+      },
+      "type_spaced": {
+        "mentions": 52,
+        "users_pct": 0.52
+      },
+      "type_wildcard": {
+        "mentions": 702,
+        "users_pct": 5.34
+      },
+      "type_partial": {
+        "mentions": 1090,
+        "users_pct": 7.79
+      },
+      "temperament": {
+        "mentions": 4382,
+        "users_pct": 24.52
+      },
+      "mbti_term": {
+        "mentions": 7310,
+        "users_pct": 41.39
+      },
+      "cognitive_function": {
+        "mentions": 29408,
+        "users_pct": 45.26
+      },
+      "socionics": {
+        "mentions": 431,
+        "users_pct": 2.06
+      },
+      "enneagram": {
+        "mentions": 6960,
+        "users_pct": 18.25
+      },
+      "stacking": {
+        "mentions": 1441,
+        "users_pct": 5.24
+      }
+    },
     "top_mentions": [
       [
-        "infps",
-        3435
+        "Fe",
+        4938
       ],
       [
-        "intjs",
-        3048
+        "MBTI",
+        4862
       ],
       [
-        "infjs",
-        2861
+        "Fi",
+        4653
       ],
       [
-        "intps",
-        2620
+        "Ne",
+        4081
       ],
       [
-        "enfps",
-        1990
+        "Ni",
+        3999
       ],
       [
-        "entps",
-        1902
+        "Ti",
+        3471
       ],
       [
-        "entjs",
-        914
+        "INFPs",
+        3150
       ],
       [
-        "enfjs",
-        863
+        "INTJs",
+        2925
       ],
       [
-        "istps",
-        817
+        "Se",
+        2858
       ],
       [
-        "istjs",
-        695
+        "Te",
+        2748
       ],
       [
-        "isfps",
-        626
+        "INFJs",
+        2678
       ],
       [
-        "esfjs",
-        563
+        "INTPs",
+        2477
       ],
       [
-        "isfjs",
-        540
+        "Si",
+        2456
       ],
       [
-        "estps",
-        529
+        "ENFPs",
+        1876
       ],
       [
-        "estjs",
-        361
+        "ENTPs",
+        1782
       ],
       [
-        "esfps",
-        323
+        "cognitive functions",
+        1008
       ],
       [
-        "xnfps",
-        44
+        "NT",
+        1003
       ],
       [
-        "xntjs",
-        41
+        "NF",
+        988
       ],
       [
-        "infpness",
-        40
+        "ENTJs",
+        868
       ],
       [
-        "infpish",
-        38
+        "ENFJs",
+        824
+      ],
+      [
+        "ISTPs",
+        772
+      ],
+      [
+        "ISTJs",
+        675
+      ],
+      [
+        "4w5",
+        668
+      ],
+      [
+        "ISFPs",
+        600
+      ],
+      [
+        "mbti",
+        574
       ]
     ]
   },
   "after": {
     "users": 8675,
-    "posts": 408925,
-    "mbti_mentions_total": 0,
-    "users_with_any_mention": 0,
-    "users_with_any_mention_pct": 0.0,
-    "users_with_own_type": 0,
+    "posts": 406794,
+    "leak_mentions_total": 0,
+    "users_with_any_leak_pct": 0.0,
     "users_with_own_type_pct": 0.0,
-    "mask_tokens_total": 129277,
+    "encoding_artefacts": 0,
+    "by_rule": {
+      "type_full": {
+        "mentions": 0,
+        "users_pct": 0.0
+      },
+      "type_spaced": {
+        "mentions": 0,
+        "users_pct": 0.0
+      },
+      "type_wildcard": {
+        "mentions": 0,
+        "users_pct": 0.0
+      },
+      "type_partial": {
+        "mentions": 0,
+        "users_pct": 0.0
+      },
+      "temperament": {
+        "mentions": 0,
+        "users_pct": 0.0
+      },
+      "mbti_term": {
+        "mentions": 0,
+        "users_pct": 0.0
+      },
+      "cognitive_function": {
+        "mentions": 0,
+        "users_pct": 0.0
+      },
+      "socionics": {
+        "mentions": 0,
+        "users_pct": 0.0
+      },
+      "enneagram": {
+        "mentions": 0,
+        "users_pct": 0.0
+      },
+      "stacking": {
+        "mentions": 0,
+        "users_pct": 0.0
+      }
+    },
     "top_mentions": []
   }
 }
