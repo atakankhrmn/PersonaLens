@@ -34,6 +34,19 @@ the app must show cautious wording and a "not enough text" warning.
 Team roles: Data Engineer (ETL + DW), ML Engineer (models + evaluation),
 App Developer (Streamlit), BI & Analysis lead (EDA, dashboard, report, presentation).
 
+### ⚠️ Mandatory: keep this table up to date
+
+**Every agent, after finishing any piece of work, must update the status table above in
+the same commit/PR as the work itself.** A task is not done until the table reflects it.
+
+- Change the row's state (`⏳ next` → `🚧 in progress` → `✅ done`) and add the key
+  file(s) or the main result (e.g. "✅ done — `src/models/baseline.py`, val Macro-F1 0.62").
+- Starting a new step? Mark it `🚧 in progress` so teammates' agents don't duplicate it.
+- New step that is not in the table yet? Add a row.
+- If the work changes how others should use the code (new command, new function,
+  changed data rule or contract), also update the matching section of this file and the README.
+- Before ending your task, tell the user which row you updated.
+
 ## Setup and commands (Windows, PowerShell)
 
 ```powershell
@@ -141,4 +154,5 @@ tests/             pytest
 - Don't store users' app input beyond what is needed (privacy).
 - Work on feature branches (`feature/etl`, `feature/model`, `feature/app`,
   `feature/dashboard`) and merge to `main` via pull requests.
-- Update the status table above and the README when a step is finished.
+- **Update the status table (see "Mandatory: keep this table up to date") in every commit
+  that finishes or starts a step.**

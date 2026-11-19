@@ -13,4 +13,7 @@ agent on the team (Claude Code, Codex, Cursor, Copilot) reads the same instructi
 - Before claiming cleaning work is done: run `python -m pytest`, re-run the ETL and check
   that `reports/etl/leakage_report_psychometric_clean.json` shows `"leak_mentions_total": 0`
   in `after`.
+- **After finishing any work, update the status table in AGENTS.md ("Current status")
+  in the same commit, and tell the user which row you changed.** Work is not done until
+  the table is updated.
 - Keep AGENTS.md as the single source of truth: put shared knowledge there, not here.
