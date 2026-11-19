@@ -1,0 +1,23 @@
+# Data
+pandas>=2.2
+pyarrow>=16.0
+datasets>=3.0
+
+# ML
+scikit-learn>=1.5
+joblib>=1.4
+
+# Visualization
+matplotlib>=3.9
+seaborn>=0.13
+
+# Notebooks
+jupyter>=1.0
+ipykernel>=6.29
+
+# App / Dashboard
+streamlit>=1.40
+
+# Data warehouse
+sqlalchemy>=2.0
+psycopg2-binary>=2.9

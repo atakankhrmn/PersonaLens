@@ -48,10 +48,56 @@ PersonalityCafe forum, not from Twitter/X.
 | Streamlit | User interface and dashboard |
 | Power BI | Optional additional BI visualizations |
 
+## Getting Started
+
+```powershell
+git clone https://github.com/atakankhrmn/PersonaLens.git
+cd PersonaLens
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+Then open `notebooks/01_eda.ipynb` (VS Code or `jupyter notebook`) and run all cells.
+The dataset (~80 MB per configuration) is downloaded on first run and cached in `data/raw/`.
+
+Load the data from your own code:
+
+```python
+from src.data_loader import load_mbti
+df = load_mbti("label_clean")   # or "raw", "psychometric_clean"
+train = df[df["split"] == "train"]
+```
+
+## Project Structure
+
+```
+PersonaLens/
+├── app/              # Streamlit app
+├── data/
+│   ├── raw/          # downloaded dataset (not tracked by git)
+│   └── processed/    # ETL outputs (not tracked by git)
+├── models/           # trained model files (not tracked by git)
+├── notebooks/        # EDA and experiments
+├── reports/figures/  # generated charts for dashboard / presentation
+└── src/
+    ├── data_loader.py
+    ├── etl/          # ETL and data warehouse scripts
+    └── models/       # training and evaluation code
+```
+
+## Key EDA Findings
+
+- 8,675 users, ~47 posts each; 16-class imbalance of ~47:1 (INFP most, ESTJ least)
+- Majority shares: I 77.0%, N 86.2%, F 54.1%, P 60.4% → use Macro-F1 / Balanced Accuracy
+- User-level splits have no overlapping users
+- **Leakage:** in `label_clean`, ~48.6% of users still have their *own* type in the text
+  through suffixed forms such as `INFPs` → must be masked in our ETL
+
 ## Project Plan
 
 The full project plan (in Turkish) is available in [MBTI_DW_Proje_Plani.md](MBTI_DW_Proje_Plani.md).
 
 ## Status
 
-🚧 Early stage: planning and dataset exploration.
+🚧 Early stage: project skeleton and EDA done; ETL and baseline models next.

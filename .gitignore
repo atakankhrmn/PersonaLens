@@ -11,8 +11,10 @@ env/
 .streamlit/secrets.toml
 
 # Data & models (large files)
-data/raw/
-data/processed/
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
 models/*.pkl
 models/*.joblib
 
