@@ -26,7 +26,7 @@ the app must show cautious wording and a "not enough text" warning.
 | Project skeleton, requirements, data loader | ✅ done |
 | EDA notebook (`notebooks/01_eda.ipynb`) | ✅ done |
 | Cleaning / leakage ETL (`src/etl/`) + 70 tests | ✅ done |
-| Baseline models (4 binary classifiers) | ✅ done — `src/models/` (train, evaluate, predict), `reports/models/`; validation Macro-F1 LogReg: EI 0.64, NS 0.62, FT 0.81, JP 0.63, 16-type 0.19 (majority 0.02); SVM ≈ same; train+val predictions in DW, 11 tests. Test split not touched yet |
+| Baseline models (4 binary classifiers) | ✅ done — `src/models/` (train, evaluate, predict), `reports/models/`; **final test** Macro-F1 LogReg: EI 0.66, NS 0.60, FT 0.79, JP 0.63, 16-type 0.20 (majority 0.02), exact match 36.9% (majority 21.2%); SVM ≈ same; all splits' predictions in DW, 11 tests. Test split now used — see "Baseline results and caveats" |
 | PostgreSQL star schema + DW load | ✅ done — `src/dw/` (schema.sql, load_dw.py, predictions.py), main source (label_clean) posts + quality metrics of all 3 configs, 16 tests |
 | Streamlit app | ⏳ next — use `src.models.predict.predict()` |
 | BI dashboard | ⏳ not started |
@@ -186,6 +186,43 @@ then re-run the ETL and confirm the report shows 0 leaks.
   `texts` = posts of one person; runs `clean_text` on them first; `enough_text` is False
   below `MIN_WORDS` (300) and the app must then show the "not enough text" warning.
   Default model: `models/tfidf_logreg.joblib`.
+
+### Baseline results and caveats (read before using or changing the models)
+
+Final **test** results of v1 (Macro-F1; `--final-test` run on 2026-11-21; validation in brackets):
+
+| Model | E/I | N/S | T/F | J/P | 16 types | exact match |
+|---|---|---|---|---|---|---|
+| Majority baseline (always INFP) | 0.44 | 0.46 | 0.35 | 0.38 | 0.02 | 21.2% |
+| TF-IDF + LogReg | 0.655 (0.642) | 0.598 (0.615) | 0.788 (0.805) | 0.628 (0.633) | 0.201 (0.193) | 36.9% |
+| TF-IDF + LinearSVC | 0.656 (0.642) | 0.598 (0.615) | 0.790 (0.802) | 0.626 (0.635) | 0.197 (0.193) | 36.7% |
+
+Test ≈ validation, so the tuning did not overfit validation. Average 3.06 of 4 letters right
+(majority baseline: 2.78).
+
+1. **The test split is now used.** Never tune or pick a model by looking at test numbers.
+   A new model (v2, BERT …) is tuned on validation only and gets ONE `--final-test` run at
+   the end; all compared models must be reported on the same test split.
+2. **Re-running `train` without `--final-test` overwrites `reports/models/*_v1.json` and
+   drops the test metrics.** For experiments use a new `--version` (e.g. `--version v2`),
+   or re-run v1 with `--final-test` (results are deterministic: same C, same numbers).
+3. **Train-split predictions are in-sample** (train exact match 96% vs 35% on validation).
+   The DW holds predictions for all three splits; dashboard/report performance figures
+   must filter `split IN ('validation', 'test')`, never mix in `train`.
+4. **Masking placeholders are among the top features** (e.g. `typology_term`,
+   `mbti_type are`, `dear mbti_type`, `mbti_term` push towards E and S). Not direct
+   leakage (the token is identical for every type) but an indirect "talks about types"
+   signal. Planned ablation for the paper: drop the placeholder tokens and compare.
+5. **N/S is the weakest axis**: best C is at the low end of the grid (0.01 LogReg,
+   0.001 SVM) with tiny gains (0.609 → 0.615). The signal is weak; more C tuning won't help.
+6. **Scores are not real-world probabilities.** `class_weight="balanced"` trains as if
+   both letters were equally common, and the SVM score is an uncalibrated sigmoid. The
+   app must not say "73% chance you are E"; use wording like "leans towards E".
+7. **Domain and length:** trained on long PersonalityCafe forum histories (~1,300 words
+   per user). Short or non-forum text (tweets, one paragraph) is out of domain; keep the
+   `enough_text` warning. Labels are self-reported MBTI, not a diagnosis.
+8. Models are fit on train only (no refit on train+validation); top words per letter are
+   in the report JSONs (`top_features`), useful for the paper's interpretation section.
 
 ## Repo layout
 

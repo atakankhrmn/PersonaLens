@@ -137,6 +137,63 @@
         "mean_letters_correct": 2.7764,
         "majority_type": "INFP"
       }
+    },
+    "test": {
+      "EI": {
+        "macro_f1": 0.6551,
+        "balanced_accuracy": 0.6448,
+        "accuracy": 0.7741
+      },
+      "NS": {
+        "macro_f1": 0.5979,
+        "balanced_accuracy": 0.582,
+        "accuracy": 0.849
+      },
+      "FT": {
+        "macro_f1": 0.7881,
+        "balanced_accuracy": 0.788,
+        "accuracy": 0.7896
+      },
+      "JP": {
+        "macro_f1": 0.6276,
+        "balanced_accuracy": 0.6258,
+        "accuracy": 0.6519
+      },
+      "type16": {
+        "macro_f1": 0.201,
+        "balanced_accuracy": 0.1998,
+        "exact_match": 0.3689,
+        "mean_letters_correct": 3.0646
+      }
+    },
+    "majority_baseline_test": {
+      "EI": {
+        "macro_f1": 0.4349,
+        "balanced_accuracy": 0.5,
+        "accuracy": 0.7695
+      },
+      "NS": {
+        "macro_f1": 0.463,
+        "balanced_accuracy": 0.5,
+        "accuracy": 0.8622
+      },
+      "FT": {
+        "macro_f1": 0.3512,
+        "balanced_accuracy": 0.5,
+        "accuracy": 0.5412
+      },
+      "JP": {
+        "macro_f1": 0.3766,
+        "balanced_accuracy": 0.5,
+        "accuracy": 0.604
+      },
+      "type16": {
+        "macro_f1": 0.0218,
+        "balanced_accuracy": 0.0625,
+        "exact_match": 0.2115,
+        "mean_letters_correct": 2.7769,
+        "majority_type": "INFP"
+      }
     }
   },
   "top_features": {

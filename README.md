@@ -196,7 +196,7 @@ python -m src.models.train            # train LogReg + SVM, save models/, report
 python -m src.models.train --no-dw    # without PostgreSQL
 ```
 
-Validation results (Macro-F1 / Balanced Accuracy; the test split is kept for the final evaluation):
+Validation results (Macro-F1 / Balanced Accuracy):
 
 | Model | E/I | N/S | T/F | J/P | 16 types |
 |---|---|---|---|---|---|
@@ -204,7 +204,17 @@ Validation results (Macro-F1 / Balanced Accuracy; the test split is kept for the
 | TF-IDF + LogReg | 0.64 / 0.63 | 0.62 / 0.60 | 0.81 / 0.81 | 0.63 / 0.63 | 0.19 / 0.19 |
 | TF-IDF + LinearSVC | 0.64 / 0.64 | 0.62 / 0.60 | 0.80 / 0.80 | 0.64 / 0.63 | 0.19 / 0.19 |
 
-16 types: 35% exact match, 3.08 of 4 letters right on average. T/F is the easiest axis,
+Final **test** results (Macro-F1 / Balanced Accuracy, one run with `--final-test`):
+
+| Model | E/I | N/S | T/F | J/P | 16 types |
+|---|---|---|---|---|---|
+| Majority baseline | 0.44 / 0.50 | 0.46 / 0.50 | 0.35 / 0.50 | 0.38 / 0.50 | 0.02 / 0.06 |
+| TF-IDF + LogReg | 0.66 / 0.65 | 0.60 / 0.58 | 0.79 / 0.79 | 0.63 / 0.63 | 0.20 / 0.20 |
+| TF-IDF + LinearSVC | 0.66 / 0.65 | 0.60 / 0.58 | 0.79 / 0.79 | 0.63 / 0.63 | 0.20 / 0.20 |
+
+Test: 36.9% exact 16-type match (majority baseline 21.2%), 3.06 of 4 letters right on average.
+Known caveats (in-sample train predictions, placeholder tokens as features, scores are not
+real-world probabilities, …) are listed in [AGENTS.md](AGENTS.md#baseline-results-and-caveats-read-before-using-or-changing-the-models). T/F is the easiest axis,
 N/S the hardest. Top words per letter are in `reports/models/*.json`.
 
 Using a model (e.g. in the app):
