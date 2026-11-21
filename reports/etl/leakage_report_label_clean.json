@@ -1,16 +1,16 @@
 {
   "config": "label_clean",
-  "created_at": "2026-11-19T16:18:27+00:00",
+  "created_at": "2026-11-19T18:24:51+00:00",
   "output": "data/processed/label_clean_masked.parquet",
-  "posts_removed_by_post_cleaning": 1973,
+  "posts_removed_by_post_cleaning": 1974,
   "template_texts_found": 27,
   "posts_removed_as_templates": 192,
   "users_left_without_posts": 0,
-  "seconds": 185.1,
+  "seconds": 177.7,
   "before": {
     "users": 8675,
     "posts": 408959,
-    "leak_mentions_total": 74659,
+    "leak_mentions_total": 74668,
     "users_with_any_leak_pct": 84.46,
     "users_with_own_type_pct": 48.93,
     "encoding_artefacts": 2187,
@@ -24,8 +24,8 @@
         "users_pct": 0.52
       },
       "type_wildcard": {
-        "mentions": 702,
-        "users_pct": 5.34
+        "mentions": 711,
+        "users_pct": 5.41
       },
       "type_partial": {
         "mentions": 1090,
@@ -161,7 +161,7 @@
   },
   "after": {
     "users": 8675,
-    "posts": 406794,
+    "posts": 406793,
     "leak_mentions_total": 0,
     "users_with_any_leak_pct": 0.0,
     "users_with_own_type_pct": 0.0,

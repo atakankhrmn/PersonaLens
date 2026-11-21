@@ -69,7 +69,7 @@ Even the strictest Hugging Face config still leaks the label. Our ETL step
 | What | Examples | Replaced by |
 |---|---|---|
 | Encoding artefacts | `isnx92t`, `x93quotex94`, `u200b` | `isn't`, `"quote"`, `` |
-| MBTI types in any form | `INFPs`, `mrinfj`, `I.N.F.J`, `INxJ`, `E_TJ` | `<MBTI_TYPE>` |
+| MBTI types in any form | `INFPs`, `mrinfj`, `I.N.F.J`, `INxJ`, `E_TJ`, `Ixxx`, `xxFx` | `<MBTI_TYPE>` |
 | Partial codes & temperaments | `NFPs`, `NTJ`, `NT`, `SJs` | `<MBTI_TYPE>` |
 | MBTI system words | `MBTI`, `Myers-Briggs`, `cognitive functions` | `<MBTI_TERM>` |
 | Cognitive functions | `Fi`, `Ne-dom`, `NeTi` | `<COGNITIVE_FUNCTION>` |
@@ -81,7 +81,7 @@ Deliberately **kept**: words like *introvert*, *thinking*, *feeling* (genuine la
 "extrovert" users are only 25.7% E vs. a 23% base rate), stop words, and truncated posts.
 
 ```powershell
-python -m src.etl.clean_leakage                 # psychometric_clean (default, main training set)
+python -m src.etl.clean_leakage                 # label_clean (default, main training set)
 python -m src.etl.clean_leakage --config all    # raw, label_clean, psychometric_clean
 ```
 
@@ -93,8 +93,12 @@ Results (users with any leak / with their **own** type in the text):
 | Config | before | after |
 |---|---:|---:|
 | `raw` | 96.7% / 90.0% | 0% / 0% |
-| `label_clean` | 84.5% / 48.9% | 0% / 0% |
-| `psychometric_clean` (main) | 75.9% / 48.9% | 0% / 0% |
+| `label_clean` (main) | 84.5% / 48.9% | 0% / 0% |
+| `psychometric_clean` | 75.9% / 48.9% | 0% / 0% |
+
+Why `label_clean` is the main base: after our cleaning the three configs are 98–99.7%
+identical; the only difference to `psychometric_clean` is that HF wrongly masks
+`Sci-Fi`/`Wi-Fi`/`Hi-Fi` there, while our rules already cover its extra masking.
 
 All 8,675 users are kept; ~2,150 of ~409k posts (0.5%) are dropped and 2,187 encoding
 artefacts are fixed. An independent check with different regexes finds no remaining
@@ -108,11 +112,78 @@ Run the tests with `python -m pytest`. The Streamlit app must call the same
 ```python
 from src.data_loader import load_clean, load_mbti
 
-df = load_clean()                # psychometric_clean + our cleaning → use this for models
-lc = load_clean("label_clean")   # same cleaning on label_clean, for comparison
+df = load_clean()                # label_clean + our cleaning → use this for models
+pc = load_clean("psychometric_clean")  # same cleaning on another HF config, for comparison
 raw = load_mbti("raw")           # original HF configs, e.g. for EDA
 train = df[df["split"] == "train"]
 ```
+
+## Data Warehouse (PostgreSQL)
+
+A star schema in the `dw` schema of the `personalens` database ([src/dw/schema.sql](src/dw/schema.sql)).
+
+```mermaid
+erDiagram
+    dim_user      ||--o{ fact_post : user_key
+    dim_mbti_type ||--o{ fact_post : type_key
+    dim_source    ||--o{ fact_post : source_key
+    dim_etl_run   ||--o{ fact_post : etl_run_key
+    dim_date      ||--o{ fact_post : load_date_key
+    dim_model     ||--o{ fact_prediction : model_key
+    dim_user      |o--o{ fact_prediction : user_key
+    dim_mbti_type ||--o{ fact_prediction : "true / predicted type"
+    dim_source    ||--o{ fact_prediction : source_key
+    dim_date      ||--o{ fact_prediction : date_key
+    dim_etl_run   ||--o{ fact_data_quality : etl_run_key
+    dim_source    ||--o{ fact_data_quality : source_key
+    dim_date      ||--o{ fact_data_quality : date_key
+```
+
+| Table | Grain / content | Rows now |
+|---|---|---:|
+| `fact_post` | one cleaned post: words, chars, URLs, masks, truncated flag, cleaned text | 406,793 (main source only) |
+| `fact_prediction` | one model prediction per user (or per app request, text not stored) | 0 (filled by ML step) |
+| `fact_data_quality` | one ETL run × quality metric (leaks, artefacts, removed posts) | 87 |
+| `dim_user` | anonymous user, split, self-reported type | 8,675 |
+| `dim_mbti_type` | 16 types, 4 letters, temperament | 16 |
+| `dim_source` | dataset config + cleaning variant (or the app) | 3 |
+| `dim_model`, `dim_etl_run`, `dim_date` | models, load runs (lineage, git commit), calendar 2020–2035 | |
+
+The dataset has no post dates, so `dim_date` only holds real dates (load date, prediction date).
+BI views: `vw_type_distribution`, `vw_dimension_distribution`, `vw_user_profile`,
+`vw_posts_by_type`, `vw_data_quality_latest`, `vw_model_performance`, `vw_confusion_matrix`.
+
+### Setup (once per machine)
+
+1. Install PostgreSQL 17 (`winget install PostgreSQL.PostgreSQL.17` or the installer from
+   postgresql.org). **On a Turkish Windows** the default installer fails with
+   *locale name "Turkish_Türkiye.1254" contains non-ASCII characters*; choose locale **C**
+   (installer option `--locale C`) and UTF8 encoding.
+2. Copy `.env.example` to `.env` and put your own postgres password into `DATABASE_URL`.
+3. Load the warehouse (creates the `personalens` database and the schema automatically):
+
+```powershell
+python -m src.etl.clean_leakage --config all   # if data/processed/ is empty
+python -m src.dw.load_dw                       # ~30 s, safe to re-run
+```
+
+Browse the tables with pgAdmin 4 (installed with PostgreSQL) or connect Power BI to
+`localhost:5432`, database `personalens`, schema `dw`.
+
+### Writing model results (ML step)
+
+```python
+from src.dw.db import get_engine
+from src.dw.predictions import register_model, write_predictions
+
+engine = get_engine()
+key = register_model(engine, "tfidf_logreg", "v1", algorithm="TF-IDF + LogisticRegression",
+                     metrics={"val_macro_f1": {...}})
+write_predictions(engine, key, preds)  # columns: user_id, predicted_type, score_e/n/t/j
+```
+
+`vw_model_performance` and `vw_confusion_matrix` then show the results for the dashboard.
+The app uses `log_app_prediction(...)`, which stores the prediction but never the user's text.
 
 ## Project Structure
 
@@ -129,7 +200,8 @@ PersonaLens/
 │   └── figures/      # generated charts for dashboard / presentation
 ├── src/
 │   ├── data_loader.py
-│   ├── etl/          # cleaning rules, leakage ETL, data warehouse scripts
+│   ├── etl/          # cleaning rules, leakage ETL
+│   ├── dw/           # star schema SQL, DW load, prediction writer
 │   └── models/       # training and evaluation code
 └── tests/            # pytest unit tests
 ```
@@ -155,4 +227,4 @@ The full project plan (in Turkish) is available in [MBTI_DW_Proje_Plani.md](MBTI
 
 ## Status
 
-🚧 Early stage: EDA and leakage-cleaning ETL done; baseline models and data warehouse next.
+🚧 EDA, cleaning ETL and PostgreSQL data warehouse done; baseline models next.

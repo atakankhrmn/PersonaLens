@@ -1,16 +1,16 @@
 {
   "config": "raw",
-  "created_at": "2026-11-19T16:15:22+00:00",
+  "created_at": "2026-11-19T18:21:54+00:00",
   "output": "data/processed/raw_masked.parquet",
-  "posts_removed_by_post_cleaning": 2328,
+  "posts_removed_by_post_cleaning": 2331,
   "template_texts_found": 27,
   "posts_removed_as_templates": 192,
   "users_left_without_posts": 0,
-  "seconds": 243.0,
+  "seconds": 187.0,
   "before": {
     "users": 8675,
     "posts": 409318,
-    "leak_mentions_total": 180681,
+    "leak_mentions_total": 180812,
     "users_with_any_leak_pct": 96.66,
     "users_with_own_type_pct": 89.95,
     "encoding_artefacts": 2187,
@@ -24,8 +24,8 @@
         "users_pct": 0.52
       },
       "type_wildcard": {
-        "mentions": 4781,
-        "users_pct": 23.88
+        "mentions": 4912,
+        "users_pct": 24.52
       },
       "type_partial": {
         "mentions": 1090,
@@ -161,7 +161,7 @@
   },
   "after": {
     "users": 8675,
-    "posts": 406798,
+    "posts": 406795,
     "leak_mentions_total": 0,
     "users_with_any_leak_pct": 0.0,
     "users_with_own_type_pct": 0.0,

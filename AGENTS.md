@@ -26,8 +26,8 @@ the app must show cautious wording and a "not enough text" warning.
 | Project skeleton, requirements, data loader | ✅ done |
 | EDA notebook (`notebooks/01_eda.ipynb`) | ✅ done |
 | Cleaning / leakage ETL (`src/etl/`) + 70 tests | ✅ done |
-| Baseline models (4 binary classifiers) | ⏳ next |
-| PostgreSQL star schema + DW load | ⏳ next |
+| Baseline models (4 binary classifiers) | ⏳ next — team will do it together |
+| PostgreSQL star schema + DW load | ✅ done — `src/dw/` (schema.sql, load_dw.py, predictions.py), main source (label_clean) posts + quality metrics of all 3 configs, 16 tests |
 | Streamlit app | ⏳ not started |
 | BI dashboard | ⏳ not started |
 
@@ -56,11 +56,43 @@ pip install -r requirements.txt
 
 python -m pytest                                  # run tests (must stay green)
 python -m src.etl.clean_leakage                   # build main training data (~2–4 min)
-python -m src.etl.clean_leakage --config all      # all three configs
+python -m src.etl.clean_leakage --config all      # all three configs (quality reports)
+python -m src.dw.load_dw                          # load warehouse (~30 s)
 ```
 
 Always use the project `.venv` interpreter. In VS Code the Jupyter extension is required
 and the notebook kernel must be `.venv` (not the global Python, which lacks the packages).
+
+## Data warehouse (src/dw/)
+
+PostgreSQL 17, database `personalens`, schema `dw`. Connection string: `DATABASE_URL` in the
+git-ignored `.env` (template: `.env.example`). **Never print or commit the password.**
+On Turkish Windows PostgreSQL must be initialised with locale `C` (installer `--locale C`),
+otherwise `initdb` fails on "Turkish_Türkiye.1254".
+
+- `schema.sql` — idempotent DDL: `dim_mbti_type`, `dim_user`, `dim_source`, `dim_date`
+  (2020–2035), `dim_model`, `dim_etl_run`; facts `fact_post` (grain: one cleaned post, keeps
+  `post_text`), `fact_prediction` (user × model; `user_key` NULL for app requests),
+  `fact_data_quality` (ETL run × metric); BI views `vw_*`.
+- `load_dw.py` — `python -m src.dw.load_dw [--config X] [--sample N]`. Upserts dimensions,
+  replaces `fact_post` with the posts of ONE source (default: main `label_clean`; the three
+  cleaned configs are 98–99.7% identical, so storing all would only triple the table), and
+  appends quality metrics of all three configs from
+  `reports/etl/leakage_report_<config>.json`, records the run in `dim_etl_run`. One
+  transaction; safe to re-run; never touches `fact_prediction`.
+- `predictions.py` — the ML/app contract for writing results:
+  `register_model(engine, name, version, algorithm=, params=, metrics=) -> model_key`,
+  `write_predictions(engine, model_key, preds)` (`preds`: `user_id`, `predicted_type`,
+  `score_e/n/t/j` = probability of E, N, T, J; true type and split come from `dim_user`;
+  replaces earlier rows of the same model+users), `log_app_prediction(...)` (app; never
+  stores the user's text).
+- The dataset has no post timestamps: never invent dates; `dim_date` is only for load and
+  prediction dates.
+- Main source code: `personalitycafe/label_clean+leak_masked`.
+- `tests/test_dw.py` integration tests use a throw-away `personalens_test` database and are
+  skipped when PostgreSQL is not reachable.
+- Schema changes: edit `schema.sql` with `IF NOT EXISTS` / `CREATE OR REPLACE`; for a column
+  change on an existing table, drop the `dw` schema (`DROP SCHEMA dw CASCADE`) and reload.
 
 ## Data — the most important rules
 
@@ -74,12 +106,15 @@ Configs: `raw` (no masking), `label_clean` (exact MBTI codes masked), `psychomet
 
 ```python
 from src.data_loader import load_clean
-df = load_clean()          # = data/processed/psychometric_clean_masked.parquet
+df = load_clean()          # = data/processed/label_clean_masked.parquet
 train = df[df["split"] == "train"]
 ```
 
-- `load_clean()` defaults to `psychometric_clean` + our cleaning. This is the main dataset.
-  `load_clean("label_clean")` / `load_clean("raw")` exist only for comparison experiments.
+- `load_clean()` defaults to `MAIN_CONFIG` = HF `label_clean` + our cleaning. This is the main
+  dataset. Our rules already mask everything `psychometric_clean` adds (MBTI terms, cognitive
+  functions), and HF's `psychometric_clean` wrongly masks `Sci-Fi`/`Wi-Fi`/`Hi-Fi`, so
+  `label_clean` is the cleaner base. `load_clean("psychometric_clean")` / `load_clean("raw")`
+  exist only for comparison experiments.
 - Do **not** train on `load_mbti(...)` (raw HF data): even `psychometric_clean` still
   leaks the label for 75.9% of users (e.g. `INFPs`, `NT`, `4w5`).
 - Use the given `split` column (train 5,205 / validation 1,735 / test 1,735 users,
@@ -100,7 +135,7 @@ It fixes encoding artefacts (`isnx92t` → `isn't`, `x93`/`x94` → quotes, `x95
 
 | Placeholder | Covers |
 |---|---|
-| `<MBTI_TYPE>` | full types in any form (`INFPs`, `mrinfj`, `I.N.F.J`, `INxJ`, `E_TJ`), partial codes (`NFP`, `NTJ`), temperaments (`NT`, `NF`, `SJ`, `SP`) |
+| `<MBTI_TYPE>` | full types in any form (`INFPs`, `mrinfj`, `I.N.F.J`, `INxJ`, `E_TJ`, and with 3 wildcards `Ixxx`, `xxFx` when the word is only the code; `xxxx`/`Exxxcellent` untouched), partial codes (`NFP`, `NTJ`), temperaments (`NT`, `NF`, `SJ`, `SP`) |
 | `<MBTI_TERM>` | `MBTI` (also glued), `Myers-Briggs`, `cognitive function(s)` |
 | `<COGNITIVE_FUNCTION>` | `Fi`, `Ne-dom`, `NeTi` … (case-sensitive) |
 | `<TYPOLOGY_TERM>` | Socionics (`LII`, `SEE-Fi`), Enneagram (`4w5`, `cp6w7`), stackings (`sx/so`) |
@@ -142,6 +177,7 @@ notebooks/         01_eda.ipynb
 reports/etl/       ETL data-quality reports     reports/figures/ EDA charts
 src/data_loader.py load_mbti(), load_clean()
 src/etl/           cleaning.py (rules), clean_leakage.py (ETL step)
+src/dw/            schema.sql, db.py (engine/.env), load_dw.py (DW load), predictions.py
 src/models/        training / evaluation code (empty)
 tests/             pytest
 ```
@@ -153,6 +189,8 @@ tests/             pytest
 - Don't commit data, models, `.venv/` or secrets (`.env`, `.streamlit/secrets.toml`).
 - Don't store users' app input beyond what is needed (privacy).
 - Work on feature branches (`feature/etl`, `feature/model`, `feature/app`,
-  `feature/dashboard`) and merge to `main` via pull requests.
+  `feature/dashboard`) and merge to `main` via pull requests. **`main` is protected on
+  GitHub: direct pushes (also by admins) and force pushes are rejected**, so always push a
+  branch and open a PR (`gh pr create`). Start new work from an up-to-date `main` (`git pull`).
 - **Update the status table (see "Mandatory: keep this table up to date") in every commit
   that finishes or starts a step.**
