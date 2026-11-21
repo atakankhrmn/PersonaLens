@@ -27,6 +27,7 @@ the app must show cautious wording and a "not enough text" warning.
 | EDA notebook (`notebooks/01_eda.ipynb`) | ✅ done |
 | Cleaning / leakage ETL (`src/etl/`) + 70 tests | ✅ done |
 | Baseline models (4 binary classifiers) | ✅ done — `src/models/` (train, evaluate, predict), `reports/models/`; **final test** Macro-F1 LogReg: EI 0.66, NS 0.60, FT 0.79, JP 0.63, 16-type 0.20 (majority 0.02), exact match 36.9% (majority 21.2%); SVM ≈ same; all splits' predictions in DW, 11 tests. Test split now used — see "Baseline results and caveats" |
+| Model improvements (v2) | ⏳ planned, not started — ideas listed in "Improvement backlog" below |
 | PostgreSQL star schema + DW load | ✅ done — `src/dw/` (schema.sql, load_dw.py, predictions.py), main source (label_clean) posts + quality metrics of all 3 configs, 16 tests |
 | Streamlit app | ⏳ next — use `src.models.predict.predict()` |
 | BI dashboard | ⏳ not started |
@@ -223,6 +224,38 @@ Test ≈ validation, so the tuning did not overfit validation. Average 3.06 of 4
    `enough_text` warning. Labels are self-reported MBTI, not a diagnosis.
 8. Models are fit on train only (no refit on train+validation); top words per letter are
    in the report JSONs (`top_features`), useful for the paper's interpretation section.
+
+### Improvement backlog (not started — team will revisit)
+
+Realistic expectation: a few points (≈ +0.02–0.05 Macro-F1); labels are self-reported and
+noisy. Every idea is compared on **validation only**; the chosen version gets one
+`--version v2 --final-test` run. Planned order: v2 = ideas 1–4 together (measure each one's
+contribution on validation), then 6 if time allows, BERT (8) last.
+
+**Easy (hours, current code):**
+1. **Per-axis decision threshold** tuned on validation instead of 0.5 (test recall is only
+   41% for E and 21% for S). Cheapest gain for minority letters.
+2. **Character n-grams** (e.g. `char_wb` 2–5) next to word n-grams: captures style such as
+   `:)`, `xD`, `...`, `!!!`, capitalisation.
+3. **Stylistic features**: post length, links per post, `?`/`!` rate, first-person
+   (`I/me/my`) vs `we/you` rate, etc. Easy to interpret in the paper.
+4. **Refit on train + validation** after choosing hyper-parameters (+33% data).
+5. **Tune TF-IDF too** (`max_features`, `ngram_range`, `min_df`), not only `C`.
+
+**Medium (1–2 days):**
+6. **Sentence embeddings** (e.g. `sentence-transformers/all-MiniLM-L6-v2`, no fine-tuning;
+   average post embeddings per user) + LogReg, alone and combined with TF-IDF. CPU is fine
+   but embedding ~400k posts takes about an hour; cache the vectors.
+7. **Smarter 16-type decision**: score all 16 types from the four probabilities (optionally
+   with priors) instead of picking letters independently; v1 never got ESTJ/ESFJ/ESFP right.
+
+**Hard (only if time allows):**
+8. **Fine-tune BERT/RoBERTa**: needs a GPU (Colab); 512-token limit vs ~1,300 words per
+   user → chunk and average. On this data usually only a few points over TF-IDF.
+
+**For the paper (credibility, not accuracy):**
+9. **Bootstrap confidence intervals** on test metrics, to show whether model differences are real.
+10. **Placeholder ablation** (caveat 4): drop `mbti_type`/`typology_term`/… tokens and compare.
 
 ## Repo layout
 
