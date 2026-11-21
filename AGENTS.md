@@ -26,9 +26,9 @@ the app must show cautious wording and a "not enough text" warning.
 | Project skeleton, requirements, data loader | ✅ done |
 | EDA notebook (`notebooks/01_eda.ipynb`) | ✅ done |
 | Cleaning / leakage ETL (`src/etl/`) + 70 tests | ✅ done |
-| Baseline models (4 binary classifiers) | ⏳ next — team will do it together |
+| Baseline models (4 binary classifiers) | ✅ done — `src/models/` (train, evaluate, predict), `reports/models/`; validation Macro-F1 LogReg: EI 0.64, NS 0.62, FT 0.81, JP 0.63, 16-type 0.19 (majority 0.02); SVM ≈ same; train+val predictions in DW, 11 tests. Test split not touched yet |
 | PostgreSQL star schema + DW load | ✅ done — `src/dw/` (schema.sql, load_dw.py, predictions.py), main source (label_clean) posts + quality metrics of all 3 configs, 16 tests |
-| Streamlit app | ⏳ not started |
+| Streamlit app | ⏳ next — use `src.models.predict.predict()` |
 | BI dashboard | ⏳ not started |
 
 Team roles: Data Engineer (ETL + DW), ML Engineer (models + evaluation),
@@ -164,8 +164,28 @@ then re-run the ETL and confirm the report shows 0 leaks.
   majority-class baseline.
 - TF-IDF default tokenisation turns `<MBTI_TYPE>` into the token `mbti_type`; that is fine
   (it is identical for every type).
-- Save models under `models/` (git-ignored) with joblib. Planned app contract:
-  `predict(texts: list[str]) -> {"type": "INTP", "scores": {"EI": ..., "NS": ..., "FT": ..., "JP": ...}}`.
+- Labels: the 0/1 targets are the `*_label` columns (`EI_label` …); `EI` itself holds the letter.
+
+### Baseline code (src/models/)
+
+- `python -m src.models.train [--model logreg|svm|all] [--version v1] [--no-dw] [--final-test]`
+  (~a few minutes). Fits ONE TF-IDF (word 1–2-grams, `min_df=3`, `max_df=0.9`,
+  200k features, sublinear tf) on train users only, then per dimension tunes `C` on
+  validation Macro-F1 (`C_GRID` in `train.py`), saves `models/tfidf_<algo>.joblib`, the
+  report `reports/models/tfidf_<algo>_<version>.json` (metrics, chosen C, majority
+  baseline, top words per letter) and writes train+validation predictions to the DW via
+  `register_model` / `write_predictions` (skipped with a message if PostgreSQL is down).
+- `--final-test` also scores the test split. Use it **once**, for the final paper numbers.
+- `model.py` — `PersonaModel` (vectoriser + 4 classifiers, `scores_from_matrix`,
+  `predict_cleaned`, `top_features`, `save`/`load`). Scores are P(E), P(N), P(T), P(J);
+  > 0.5 means that letter. LinearSVC has no probabilities: its score is a sigmoid of the
+  decision value (uncalibrated, but on the same 0.5 threshold).
+- `evaluate.py` — `evaluate`, `majority_baseline`, `letters_to_type`, `format_table`.
+- `predict.py` — app contract:
+  `predict(texts) -> {"type", "scores": {"EI","NS","FT","JP"}, "n_words", "enough_text", "model"}`.
+  `texts` = posts of one person; runs `clean_text` on them first; `enough_text` is False
+  below `MIN_WORDS` (300) and the app must then show the "not enough text" warning.
+  Default model: `models/tfidf_logreg.joblib`.
 
 ## Repo layout
 
@@ -175,10 +195,11 @@ data/raw/          HF downloads (ignored)      data/processed/  ETL output (igno
 models/            trained models (ignored)
 notebooks/         01_eda.ipynb
 reports/etl/       ETL data-quality reports     reports/figures/ EDA charts
+reports/models/    model reports (metrics, chosen C, top words)
 src/data_loader.py load_mbti(), load_clean()
 src/etl/           cleaning.py (rules), clean_leakage.py (ETL step)
 src/dw/            schema.sql, db.py (engine/.env), load_dw.py (DW load), predictions.py
-src/models/        training / evaluation code (empty)
+src/models/        model.py, train.py, evaluate.py, predict.py
 tests/             pytest
 ```
 
