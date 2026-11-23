@@ -1,0 +1,6 @@
+{
+  "name": "PersonaLens",
+  "description": "Explore your personality through AI-powered text analysis and discover the 16 MBTI personality archetypes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
