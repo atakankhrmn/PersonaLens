@@ -151,7 +151,10 @@ erDiagram
 
 The dataset has no post dates, so `dim_date` only holds real dates (load date, prediction date).
 BI views: `vw_type_distribution`, `vw_dimension_distribution`, `vw_user_profile`,
-`vw_posts_by_type`, `vw_data_quality_latest`, `vw_model_performance`, `vw_confusion_matrix`.
+`vw_posts_by_type`, `vw_data_quality_latest`, `vw_model_performance`, `vw_confusion_matrix`,
+`vw_model_dimension_metrics` (Macro-F1 / Balanced Accuracy per dimension) and
+`vw_model_type_metrics` (precision / recall / F1 per MBTI type). Filter model views to
+`split IN ('validation', 'test')`; train predictions are in-sample.
 
 ### Setup (once per machine)
 

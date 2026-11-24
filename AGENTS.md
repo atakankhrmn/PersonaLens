@@ -30,7 +30,7 @@ the app must show cautious wording and a "not enough text" warning.
 | PostgreSQL star schema + DW load | ✅ done — `src/dw/` (schema.sql, load_dw.py, predictions.py), main source (label_clean) posts + quality metrics of all 3 configs, 16 tests |
 | Streamlit app | ⏳ not started |
 | Web frontend (`frontend/`, React + Vite + Express proxy) | 🚧 in progress — UI, "not enough text" warning (< 300 words) and Data Insights page done; `npm install` / `bun install` and build work; waits for a Python inference API (`PYTHON_API_URL`, contract in `frontend/README.md`). Team still has to choose Streamlit vs this frontend |
-| BI dashboard | ⏳ not started |
+| BI dashboard | 🚧 in progress (Eda) — Power BI Desktop on the `dw` views (Import mode); new views `vw_model_dimension_metrics` (per-dimension Macro-F1 / Balanced Accuracy) and `vw_model_type_metrics` (16-type precision/recall/F1). Report pages: dataset profile, data quality, model performance, confusion matrix |
 
 Team roles: Data Engineer (ETL + DW), ML Engineer (models + evaluation),
 App Developer (Streamlit), BI & Analysis lead (EDA, dashboard, report, presentation).
@@ -90,6 +90,17 @@ otherwise `initdb` fails on "Turkish_Türkiye.1254".
 - The dataset has no post timestamps: never invent dates; `dim_date` is only for load and
   prediction dates.
 - Main source code: `personalitycafe/label_clean+leak_masked`.
+- BI views: `vw_type_distribution`, `vw_dimension_distribution`, `vw_user_profile`,
+  `vw_posts_by_type`, `vw_data_quality_latest`, `vw_model_performance` (accuracy),
+  `vw_confusion_matrix`, `vw_model_dimension_metrics` (per model × split × dimension:
+  tp/fp/fn/tn, recall/precision/F1 per letter, **Macro-F1, Balanced Accuracy** — computed like
+  scikit-learn, checked against it) and `vw_model_type_metrics` (per model × split × type:
+  support, precision, recall, F1; 16-type Macro-F1 = `AVG(f1) WHERE in_scope`).
+  **Dashboards must filter `split IN ('validation', 'test')`** — train predictions are in-sample.
+- `CREATE OR REPLACE VIEW` can only add columns at the END of a view; never insert a column in
+  the middle of an existing view (PostgreSQL rejects it on databases that already have it).
+- The Power BI report connects in Import mode to the views only (never to `fact_post`,
+  which holds 400k post texts).
 - `tests/test_dw.py` integration tests use a throw-away `personalens_test` database and are
   skipped when PostgreSQL is not reachable.
 - Schema changes: edit `schema.sql` with `IF NOT EXISTS` / `CREATE OR REPLACE`; for a column

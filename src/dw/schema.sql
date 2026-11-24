@@ -250,6 +250,94 @@ JOIN    dim_mbti_type tt ON tt.type_key = p.true_type_key
 WHERE   p.true_type_key IS NOT NULL
 GROUP BY m.model_name, m.model_version, p.split;
 
+-- Per-dimension metrics per model and split (dataset predictions only). The predicted
+-- letter comes from the predicted type, i.e. score > 0.5. Macro-F1 and Balanced Accuracy
+-- are the project's main metrics (classes are imbalanced: I 77%, N 86%).
+-- Dashboards must filter split IN ('validation', 'test'): train predictions are in-sample.
+CREATE OR REPLACE VIEW vw_model_dimension_metrics AS
+WITH pairs AS (
+    SELECT  m.model_name, m.model_version, p.split,
+            d.dimension, d.sort_order, d.pos_letter, d.neg_letter,
+            CASE d.dimension WHEN 'E/I' THEN tt.ei WHEN 'N/S' THEN tt.ns
+                             WHEN 'T/F' THEN tt.ft ELSE tt.jp END = d.pos_letter AS true_pos,
+            CASE d.dimension WHEN 'E/I' THEN pt.ei WHEN 'N/S' THEN pt.ns
+                             WHEN 'T/F' THEN pt.ft ELSE pt.jp END = d.pos_letter AS pred_pos
+    FROM    fact_prediction p
+    JOIN    dim_model m      ON m.model_key = p.model_key
+    JOIN    dim_mbti_type tt ON tt.type_key = p.true_type_key
+    JOIN    dim_mbti_type pt ON pt.type_key = p.predicted_type_key
+    CROSS JOIN (VALUES ('E/I', 1, 'E', 'I'), ('N/S', 2, 'N', 'S'),
+                       ('T/F', 3, 'T', 'F'), ('J/P', 4, 'J', 'P'))
+               AS d (dimension, sort_order, pos_letter, neg_letter)
+    WHERE   p.true_type_key IS NOT NULL
+), counts AS (
+    SELECT  model_name, model_version, split, dimension, sort_order, pos_letter, neg_letter,
+            COUNT(*)                                          AS users,
+            SUM((true_pos AND pred_pos)::INT)::NUMERIC         AS tp,
+            SUM((NOT true_pos AND pred_pos)::INT)::NUMERIC     AS fp,
+            SUM((true_pos AND NOT pred_pos)::INT)::NUMERIC     AS fn,
+            SUM((NOT true_pos AND NOT pred_pos)::INT)::NUMERIC AS tn
+    FROM    pairs
+    GROUP BY model_name, model_version, split, dimension, sort_order, pos_letter, neg_letter
+), rates AS (
+    SELECT  c.*,
+            tp / NULLIF(tp + fn, 0)          AS recall_pos,
+            tn / NULLIF(tn + fp, 0)          AS recall_neg,
+            tp / NULLIF(tp + fp, 0)          AS precision_pos,
+            tn / NULLIF(tn + fn, 0)          AS precision_neg,
+            2 * tp / NULLIF(2 * tp + fp + fn, 0) AS f1_pos,
+            2 * tn / NULLIF(2 * tn + fn + fp, 0) AS f1_neg
+    FROM    counts c
+)
+SELECT  model_name, model_version, split, dimension, sort_order, pos_letter, neg_letter, users,
+        tp::INT AS tp, fp::INT AS fp, fn::INT AS fn, tn::INT AS tn,
+        ROUND((tp + fn) / users, 4)                          AS true_pos_share,
+        ROUND((tp + tn) / users, 4)                          AS accuracy,
+        -- like scikit-learn: average only over letters that occur (true or predicted for F1,
+        -- true for recall), so a split with only one letter is not penalised
+        ROUND((COALESCE(f1_pos, 0) * (tp + fn + fp > 0)::INT + COALESCE(f1_neg, 0) * (tn + fn + fp > 0)::INT)
+              / NULLIF((tp + fn + fp > 0)::INT + (tn + fn + fp > 0)::INT, 0), 4)  AS macro_f1,
+        ROUND((COALESCE(recall_pos, 0) * (tp + fn > 0)::INT + COALESCE(recall_neg, 0) * (tn + fp > 0)::INT)
+              / NULLIF((tp + fn > 0)::INT + (tn + fp > 0)::INT, 0), 4)            AS balanced_accuracy,
+        ROUND(recall_pos, 4) AS recall_pos, ROUND(recall_neg, 4) AS recall_neg,
+        ROUND(precision_pos, 4) AS precision_pos, ROUND(precision_neg, 4) AS precision_neg,
+        ROUND(f1_pos, 4) AS f1_pos, ROUND(f1_neg, 4) AS f1_neg
+FROM    rates;
+
+-- Per-type metrics (16 classes) per model and split. 16-type Macro-F1 = AVG(f1) over the
+-- rows with in_scope = TRUE (type occurs as true or predicted label, as in scikit-learn).
+-- Types the model never predicts get precision 0 / f1 0.
+CREATE OR REPLACE VIEW vw_model_type_metrics AS
+WITH preds AS (
+    SELECT  m.model_name, m.model_version, p.split, p.true_type_key, p.predicted_type_key
+    FROM    fact_prediction p
+    JOIN    dim_model m ON m.model_key = p.model_key
+    WHERE   p.true_type_key IS NOT NULL
+), groups AS (
+    SELECT DISTINCT model_name, model_version, split FROM preds
+), per_type AS (
+    SELECT  g.model_name, g.model_version, g.split, t.type_key, t.type_code, t.temperament,
+            (SELECT COUNT(*) FROM preds x WHERE x.model_name = g.model_name
+               AND x.model_version = g.model_version AND x.split = g.split
+               AND x.true_type_key = t.type_key)::NUMERIC                         AS support,
+            (SELECT COUNT(*) FROM preds x WHERE x.model_name = g.model_name
+               AND x.model_version = g.model_version AND x.split = g.split
+               AND x.predicted_type_key = t.type_key)::NUMERIC                    AS predicted,
+            (SELECT COUNT(*) FROM preds x WHERE x.model_name = g.model_name
+               AND x.model_version = g.model_version AND x.split = g.split
+               AND x.true_type_key = t.type_key
+               AND x.predicted_type_key = t.type_key)::NUMERIC                    AS correct
+    FROM    groups g
+    CROSS JOIN dim_mbti_type t
+)
+SELECT  model_name, model_version, split, type_code, temperament,
+        support::INT AS support, predicted::INT AS predicted, correct::INT AS correct,
+        ROUND(COALESCE(correct / NULLIF(predicted, 0), 0), 4)            AS precision,
+        ROUND(COALESCE(correct / NULLIF(support, 0), 0), 4)              AS recall,
+        ROUND(COALESCE(2 * correct / NULLIF(support + predicted, 0), 0), 4) AS f1,
+        (support + predicted > 0) AS in_scope
+FROM    per_type;
+
 -- Confusion matrix (true × predicted type) per model and split.
 CREATE OR REPLACE VIEW vw_confusion_matrix AS
 SELECT  m.model_name, m.model_version, p.split,
