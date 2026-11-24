@@ -147,7 +147,9 @@ export async function analyzePersonalityTexts(
     predictedType: rawType,
     scores: parseValidScores(payload?.scores),
     modelVersion,
-    analyzedPostCount: texts.length,
-    analyzedWordCount,
+    analyzedPostCount: typeof payload?.n_posts === 'number' ? payload.n_posts : texts.length,
+    analyzedWordCount: typeof payload?.n_words === 'number' ? payload.n_words : analyzedWordCount,
+    enoughText: typeof payload?.enough_text === 'boolean' ? payload.enough_text : null,
+    minWords: typeof payload?.min_words === 'number' ? payload.min_words : 300,
   };
 }

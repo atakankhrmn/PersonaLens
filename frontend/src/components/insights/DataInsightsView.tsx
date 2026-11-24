@@ -7,6 +7,7 @@ import {
   fetchEtlReports,
   fetchModelPerformance,
   fetchTypeDistribution,
+  fetchWarehouse,
   ModelInsightsPayload,
 } from '../../services/insights';
 import {
@@ -16,18 +17,21 @@ import {
   EtlConfigReport,
   InsightsDataState,
   MbtiTypeDistributionRow,
+  WarehouseInfo,
 } from '../../types/insights';
 import { DatasetOverviewSection } from './DatasetOverviewSection';
 import { EtlQualitySection } from './EtlQualitySection';
 import { MbtiDistributionSection } from './MbtiDistributionSection';
 import { ModelPerformanceSection } from './ModelPerformanceSection';
+import { WarehouseSection } from './WarehouseSection';
 
-type InsightsTab = 'overview' | 'distribution' | 'etl' | 'models';
+type InsightsTab = 'overview' | 'distribution' | 'etl' | 'warehouse' | 'models';
 
 const TAB_ITEMS: { id: InsightsTab; label: string }[] = [
   { id: 'overview', label: 'Dataset Overview' },
   { id: 'distribution', label: 'MBTI Distribution' },
   { id: 'etl', label: 'ETL & Data Quality' },
+  { id: 'warehouse', label: 'Data Warehouse' },
   { id: 'models', label: 'Model Performance' },
 ];
 
@@ -85,16 +89,25 @@ export const DataInsightsView: React.FC = () => {
     warehouseSource: 'dw.dim_model · dw.fact_prediction · dw.vw_model_performance',
   });
 
+  const [warehouseState, setWarehouseState] = useState<InsightsDataState<WarehouseInfo>>({
+    status: 'loading',
+    data: null,
+    sourceAttribution: 'Awaiting PostgreSQL Data Warehouse API',
+    plannedEndpoint: 'GET /api/insights/warehouse',
+    warehouseSource: 'dw.*',
+  });
+
   useEffect(() => {
     let mounted = true;
 
     async function loadInsights() {
-      const [overview, etl, types, dimensions, models] = await Promise.all([
+      const [overview, etl, types, dimensions, models, dw] = await Promise.all([
         fetchDatasetOverview(),
         fetchEtlReports(),
         fetchTypeDistribution(),
         fetchDimensionDistribution(),
         fetchModelPerformance(),
+        fetchWarehouse(),
       ]);
 
       if (!mounted) return;
@@ -103,6 +116,7 @@ export const DataInsightsView: React.FC = () => {
       setTypesState(types);
       setDimensionsState(dimensions);
       setModelsState(models);
+      setWarehouseState(dw);
       setIsInitialLoading(false);
     }
 
@@ -178,6 +192,7 @@ export const DataInsightsView: React.FC = () => {
         />
       )}
       {activeTab === 'etl' && <EtlQualitySection etlState={etlState} />}
+      {activeTab === 'warehouse' && <WarehouseSection warehouseState={warehouseState} />}
       {activeTab === 'models' && (
         <ModelPerformanceSection modelsState={modelsState} />
       )}

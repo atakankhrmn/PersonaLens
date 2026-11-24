@@ -42,7 +42,7 @@ export const ModelNotConnectedState: React.FC<ModelNotConnectedStateProps> = ({
 
           <p className="text-sm sm:text-base text-[#4B5364] leading-relaxed">
             {message ||
-              'The trained Python scikit-learn MBTI model is not yet connected on the main branch. No simulated or placeholder prediction was generated.'}
+              'The Python prediction API is not running. Start it from the repository root with "python -m src.api" (port 8000) and try again. No simulated or placeholder prediction was generated.'}
           </p>
         </div>
       </div>

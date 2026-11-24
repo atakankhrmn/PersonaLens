@@ -167,6 +167,17 @@ python -m src.etl.clean_leakage --config all   # if data/processed/ is empty
 python -m src.dw.load_dw                       # ~30 s, safe to re-run
 ```
 
+### Running the web app
+
+```powershell
+python -m src.api                     # terminal 1: Python API (model + insights) on :8000
+cd frontend; npm install; npm run dev # terminal 2: web app on http://localhost:3000
+```
+
+The web server proxies `/api/*` to the Python API (`PYTHON_API_URL`, default
+`http://127.0.0.1:8000`). The Data Insights page reads the warehouse and the
+`reports/` JSON files; the analyzer uses `models/tfidf_logreg.joblib` (train it first).
+
 Browse the tables with pgAdmin 4 (installed with PostgreSQL) or connect Power BI to
 `localhost:5432`, database `personalens`, schema `dw`.
 
@@ -185,11 +196,55 @@ write_predictions(engine, key, preds)  # columns: user_id, predicted_type, score
 `vw_model_performance` and `vw_confusion_matrix` then show the results for the dashboard.
 The app uses `log_app_prediction(...)`, which stores the prediction but never the user's text.
 
+## Baseline Models
+
+Four binary classifiers (E/I, N/S, T/F, J/P) on TF-IDF word 1–2-grams, `class_weight="balanced"`,
+regularisation `C` tuned per dimension on the validation split. The four letters are combined
+into the 16-type prediction.
+
+```powershell
+python -m src.models.train            # train LogReg + SVM, save models/, reports/models/, write to DW
+python -m src.models.train --no-dw    # without PostgreSQL
+```
+
+Validation results (Macro-F1 / Balanced Accuracy):
+
+| Model | E/I | N/S | T/F | J/P | 16 types |
+|---|---|---|---|---|---|
+| Majority baseline | 0.44 / 0.50 | 0.46 / 0.50 | 0.35 / 0.50 | 0.38 / 0.50 | 0.02 / 0.06 |
+| TF-IDF + LogReg | 0.64 / 0.63 | 0.62 / 0.60 | 0.81 / 0.81 | 0.63 / 0.63 | 0.19 / 0.19 |
+| TF-IDF + LinearSVC | 0.64 / 0.64 | 0.62 / 0.60 | 0.80 / 0.80 | 0.64 / 0.63 | 0.19 / 0.19 |
+
+Final **test** results (Macro-F1 / Balanced Accuracy, one run with `--final-test`):
+
+| Model | E/I | N/S | T/F | J/P | 16 types |
+|---|---|---|---|---|---|
+| Majority baseline | 0.44 / 0.50 | 0.46 / 0.50 | 0.35 / 0.50 | 0.38 / 0.50 | 0.02 / 0.06 |
+| TF-IDF + LogReg | 0.66 / 0.65 | 0.60 / 0.58 | 0.79 / 0.79 | 0.63 / 0.63 | 0.20 / 0.20 |
+| TF-IDF + LinearSVC | 0.66 / 0.65 | 0.60 / 0.58 | 0.79 / 0.79 | 0.63 / 0.63 | 0.20 / 0.20 |
+
+Test: 36.9% exact 16-type match (majority baseline 21.2%), 3.06 of 4 letters right on average.
+Known caveats (in-sample train predictions, placeholder tokens as features, scores are not
+real-world probabilities, …) are listed in [AGENTS.md](AGENTS.md#baseline-results-and-caveats-read-before-using-or-changing-the-models). T/F is the easiest axis,
+N/S the hardest. Top words per letter are in `reports/models/*.json`.
+
+Using a model (e.g. in the app):
+
+```python
+from src.models.predict import predict
+predict(["first post ...", "second post ..."])
+# {"type": "INTP", "scores": {"EI": 0.21, "NS": 0.83, "FT": 0.66, "JP": 0.31},
+#  "n_words": 512, "enough_text": True, "model": "tfidf_logreg v1"}
+```
+
+The input is cleaned with the same `clean_posts` as the training data; `enough_text` is
+False below 300 words and the app must show a warning then.
+
 ## Project Structure
 
 ```
 PersonaLens/
-├── app/              # Streamlit app
+├── app/              # Streamlit app (not used; the web frontend is the app)
 ├── frontend/         # React + Vite web UI with Express proxy (see frontend/README.md)
 ├── data/
 │   ├── raw/          # downloaded dataset (not tracked by git)
@@ -198,12 +253,14 @@ PersonaLens/
 ├── notebooks/        # EDA and experiments
 ├── reports/
 │   ├── etl/          # data-quality reports from ETL runs
+│   ├── models/       # model reports (metrics, chosen C, top words)
 │   └── figures/      # generated charts for dashboard / presentation
 ├── src/
 │   ├── data_loader.py
 │   ├── etl/          # cleaning rules, leakage ETL
 │   ├── dw/           # star schema SQL, DW load, prediction writer
-│   └── models/       # training and evaluation code
+│   ├── models/       # training and evaluation code
+│   └── api/          # FastAPI backend for the web frontend (python -m src.api)
 └── tests/            # pytest unit tests
 ```
 
@@ -228,4 +285,5 @@ The full project plan (in Turkish) is available in [MBTI_DW_Proje_Plani.md](MBTI
 
 ## Status
 
-🚧 EDA, cleaning ETL and PostgreSQL data warehouse done; baseline models next.
+🚧 EDA, cleaning ETL, PostgreSQL data warehouse, baseline models, Python API and web app
+connected. Next: model improvements (v2) and the paper.
