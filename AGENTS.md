@@ -27,6 +27,7 @@ the app must show cautious wording and a "not enough text" warning.
 | EDA notebook (`notebooks/01_eda.ipynb`) | ✅ done |
 | Cleaning / leakage ETL (`src/etl/`) + 70 tests | ✅ done |
 | Baseline models (4 binary classifiers) | ✅ done — `src/models/` (train, evaluate, predict), `reports/models/`; **final test** Macro-F1 LogReg: EI 0.66, NS 0.60, FT 0.79, JP 0.63, 16-type 0.20 (majority 0.02), exact match 36.9% (majority 21.2%); SVM ≈ same; all splits' predictions in DW, 11 tests. Test split now used — see "Baseline results and caveats" |
+| Out-of-domain check (Reddit) | ✅ done — `src/models/eval_external.py`, `reports/models/external_reddit.json`: 9,150 Reddit users (HF `minhaozhang/mbti` test split). LogReg Macro-F1 EI 0.51, NS 0.53, FT 0.59, JP 0.51, 16-type 0.08 (baseline 0.03); exact match 23.5% < always-INFP 29.2%; predicts INTP for 51% of users. See caveat 9 |
 | Model improvements (v2) | ⏳ planned, not started — ideas listed in "Improvement backlog" below |
 | PostgreSQL star schema + DW load | ✅ done — `src/dw/` (schema.sql, load_dw.py, predictions.py), main source (label_clean) posts + quality metrics of all 3 configs, 16 tests |
 | Streamlit app | ⏸ not needed for now — the web frontend below is the app |
@@ -248,6 +249,17 @@ Test ≈ validation, so the tuning did not overfit validation. Average 3.06 of 4
    `enough_text` warning. Labels are self-reported MBTI, not a diagnosis.
 8. Models are fit on train only (no refit on train+validation); top words per letter are
    in the report JSONs (`top_features`), useful for the paper's interpretation section.
+9. **The model transfers poorly to other platforms.** On 9,150 Reddit users
+   (`python -m src.models.eval_external`, data: HF `minhaozhang/mbti` test split, ~284 MB in
+   `data/raw/external/reddit_mbti/`, no dataset card, GPL-2.0 tag, provenance unclear — check
+   before citing) Macro-F1 drops to EI 0.51, NS 0.53, FT 0.59, JP 0.51 (PersonalityCafe test:
+   0.66 / 0.60 / 0.79 / 0.63). It still beats the majority baseline on every axis and on
+   16-type Macro-F1 (0.079 vs 0.028), but exact match (23.5%) is below always-INFP (29.2%),
+   because it predicts INTP for 51% of users (true 14%): Reddit's argumentative, sweary
+   style hits the T words (`shit`, `fucking`, `stupid`, `argument`). T/F transfers best.
+   31.6% of Reddit users write their own type; cleaning masks all of it (0.0% after).
+   Most other HF "MBTI" datasets are copies of the Kaggle/PersonalityCafe data (same 8,675
+   users, including our train users): never use them as an external test.
 
 ### Improvement backlog (not started — team will revisit)
 
