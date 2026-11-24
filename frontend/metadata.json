@@ -1,6 +1,6 @@
 {
   "name": "PersonaLens",
-  "description": "Explore your personality through AI-powered text analysis and discover the 16 MBTI personality archetypes.",
+  "description": "Experimental prediction of self-reported MBTI types from writing, with data-warehouse insights. Not a psychological assessment.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": []
 }

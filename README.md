@@ -190,6 +190,7 @@ The app uses `log_app_prediction(...)`, which stores the prediction but never th
 ```
 PersonaLens/
 ├── app/              # Streamlit app
+├── frontend/         # React + Vite web UI with Express proxy (see frontend/README.md)
 ├── data/
 │   ├── raw/          # downloaded dataset (not tracked by git)
 │   └── processed/    # ETL outputs (not tracked by git)
