@@ -4,6 +4,13 @@ import { SAMPLE_WRITING_PROMPTS } from '../data/personalities';
 import { countWords } from '../services/predictor';
 import { AnalyzeInputMode } from '../types/personality';
 
+/**
+ * Below this many words the "not enough text" warning is shown (required by AGENTS.md).
+ * The model is trained on whole user histories (~47 forum posts per user), so a few
+ * sentences carry very little signal. Users can still submit shorter text.
+ */
+export const MIN_RECOMMENDED_WORDS = 300;
+
 const SAMPLE_MULTI_POSTS: string[] = [
   'I spend hours sketching out half-formed ideas in notebooks during train rides, wondering how small conversations shift someone’s perspective.',
   'When plans change at the last minute, I usually treat it as an unexpected detour rather than a setback—some of my favorite evenings started that way.',
@@ -41,9 +48,12 @@ export const TextAnalyzer: React.FC<TextAnalyzerProps> = ({
   const nonEmptyPosts = multiplePosts.filter((post) => post.trim().length > 0);
   const totalMultipleWords = multiplePosts.reduce((sum, post) => sum + countWords(post), 0);
 
-  const isSingleBrief = mode === 'single' && singleWordCount > 0 && singleWordCount < 10;
+  const isSingleBrief =
+    mode === 'single' && singleWordCount > 0 && singleWordCount < MIN_RECOMMENDED_WORDS;
   const isMultipleBrief =
-    mode === 'multiple' && nonEmptyPosts.length > 0 && totalMultipleWords < 15;
+    mode === 'multiple' &&
+    nonEmptyPosts.length > 0 &&
+    totalMultipleWords < MIN_RECOMMENDED_WORDS;
 
   const canSubmit =
     !isLoading &&
@@ -155,7 +165,7 @@ export const TextAnalyzer: React.FC<TextAnalyzerProps> = ({
               >
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                 <span>
-                  Insufficient text warning: very brief samples carry limited linguistic signal. Adding a few more sentences helps, though you can still submit as-is.
+                  Not enough text: {singleWordCount} of at least {MIN_RECOMMENDED_WORDS} recommended words. The model was trained on whole forum histories (~47 posts per user), so predictions from short samples are unreliable. You can still submit as-is.
                 </span>
               </div>
             )}
@@ -241,7 +251,7 @@ export const TextAnalyzer: React.FC<TextAnalyzerProps> = ({
               >
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                 <span>
-                  Insufficient text warning: combined posts are still quite brief. Adding more detail across posts can provide stronger signal, though you may submit at any time.
+                  Not enough text: {totalMultipleWords} of at least {MIN_RECOMMENDED_WORDS} recommended words across all posts. The model was trained on whole forum histories (~47 posts per user), so predictions from short samples are unreliable. You can still submit as-is.
                 </span>
               </div>
             )}

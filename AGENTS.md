@@ -29,6 +29,7 @@ the app must show cautious wording and a "not enough text" warning.
 | Baseline models (4 binary classifiers) | ⏳ next — team will do it together |
 | PostgreSQL star schema + DW load | ✅ done — `src/dw/` (schema.sql, load_dw.py, predictions.py), main source (label_clean) posts + quality metrics of all 3 configs, 16 tests |
 | Streamlit app | ⏳ not started |
+| Web frontend (`frontend/`, React + Vite + Express proxy) | 🚧 in progress — UI, "not enough text" warning (< 300 words) and Data Insights page done; `npm install` / `bun install` and build work; waits for a Python inference API (`PYTHON_API_URL`, contract in `frontend/README.md`). Team still has to choose Streamlit vs this frontend |
 | BI dashboard | ⏳ not started |
 
 Team roles: Data Engineer (ETL + DW), ML Engineer (models + evaluation),
@@ -171,6 +172,7 @@ then re-run the ETL and confirm the report shows 0 leaks.
 
 ```
 app/               Streamlit app (empty)
+frontend/          React + Vite UI, Express proxy to the Python API (see frontend/README.md)
 data/raw/          HF downloads (ignored)      data/processed/  ETL output (ignored)
 models/            trained models (ignored)
 notebooks/         01_eda.ipynb
