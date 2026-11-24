@@ -188,6 +188,16 @@ write_predictions(engine, key, preds)  # columns: user_id, predicted_type, score
 `vw_model_performance` and `vw_confusion_matrix` then show the results for the dashboard.
 The app uses `log_app_prediction(...)`, which stores the prediction but never the user's text.
 
+## BI Dashboard (Power BI)
+
+`dashboard/PersonaLens.pbix` is a Power BI Desktop report on the warehouse views (Import
+mode). Pages: dataset profile, data quality (leakage before/after cleaning), model
+performance (Macro-F1 / Balanced Accuracy per dimension, per-type F1, 16-type Macro-F1 and
+exact match) and the confusion matrix. A single-select slicer switches between the test
+and validation splits; train predictions are never shown. Open it, set your own PostgreSQL
+password under *Data source settings* if asked, and press *Refresh* — details in
+[dashboard/README.md](dashboard/README.md).
+
 ## Project Structure
 
 ```
@@ -197,6 +207,7 @@ PersonaLens/
 ├── data/
 │   ├── raw/          # downloaded dataset (not tracked by git)
 │   └── processed/    # ETL outputs (not tracked by git)
+├── dashboard/        # Power BI report (PersonaLens.pbix) and its README
 ├── models/           # trained model files (not tracked by git)
 ├── notebooks/        # EDA and experiments
 ├── reports/

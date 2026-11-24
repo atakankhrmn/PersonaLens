@@ -30,7 +30,7 @@ the app must show cautious wording and a "not enough text" warning.
 | PostgreSQL star schema + DW load | ✅ done — `src/dw/` (schema.sql, load_dw.py, predictions.py), main source (label_clean) posts + quality metrics of all 3 configs, 16 tests |
 | Streamlit app | ⏳ not started |
 | Web frontend (`frontend/`, React + Vite + Express proxy) | 🚧 in progress — UI, "not enough text" warning (< 300 words) and Data Insights page done; `npm install` / `bun install` and build work; waits for a Python inference API (`PYTHON_API_URL`, contract in `frontend/README.md`). Team still has to choose Streamlit vs this frontend |
-| BI dashboard | 🚧 in progress (Eda) — Power BI Desktop on the `dw` views (Import mode); new views `vw_model_dimension_metrics` (per-dimension Macro-F1 / Balanced Accuracy) and `vw_model_type_metrics` (16-type precision/recall/F1). Report pages: dataset profile, data quality, model performance, confusion matrix |
+| BI dashboard | ✅ done (v1, Eda) — `dashboard/PersonaLens.pbix` (Power BI Desktop, Import mode on the `dw` views; see `dashboard/README.md`). Pages: Veri Profili, Veri Kalitesi, Model Performansı, Confusion Matrix. Model pages use a `Split` table (validation/test only, single-select slicer, default test) + TREATAS measures, so train predictions are never shown. New views `vw_model_dimension_metrics`, `vw_model_type_metrics` |
 
 Team roles: Data Engineer (ETL + DW), ML Engineer (models + evaluation),
 App Developer (Streamlit), BI & Analysis lead (EDA, dashboard, report, presentation).
@@ -186,6 +186,7 @@ app/               Streamlit app (empty)
 frontend/          React + Vite UI, Express proxy to the Python API (see frontend/README.md)
 data/raw/          HF downloads (ignored)      data/processed/  ETL output (ignored)
 models/            trained models (ignored)
+dashboard/         Power BI report PersonaLens.pbix + README (pages, refresh steps)
 notebooks/         01_eda.ipynb
 reports/etl/       ETL data-quality reports     reports/figures/ EDA charts
 src/data_loader.py load_mbti(), load_clean()
