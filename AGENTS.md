@@ -26,7 +26,8 @@ the app must show cautious wording and a "not enough text" warning.
 | Project skeleton, requirements, data loader | ✅ done |
 | EDA notebook (`notebooks/01_eda.ipynb`) | ✅ done |
 | Cleaning / leakage ETL (`src/etl/`) + 70 tests | ✅ done |
-| Baseline models (4 binary classifiers) | ⏳ next — team will do it together |
+| Baseline models (4 binary classifiers) | ✅ done — `src/models/` (train, evaluate, predict), `reports/models/`; **final test** Macro-F1 LogReg: EI 0.66, NS 0.60, FT 0.79, JP 0.63, 16-type 0.20 (majority 0.02), exact match 36.9% (majority 21.2%); SVM ≈ same; all splits' predictions in DW, 11 tests. Test split now used — see "Baseline results and caveats" |
+| Model improvements (v2) | ⏳ planned, not started — ideas listed in "Improvement backlog" below |
 | PostgreSQL star schema + DW load | ✅ done — `src/dw/` (schema.sql, load_dw.py, predictions.py), main source (label_clean) posts + quality metrics of all 3 configs, 16 tests |
 | Streamlit app | ⏳ not started |
 | Web frontend (`frontend/`, React + Vite + Express proxy) | 🚧 in progress — UI, "not enough text" warning (< 300 words) and Data Insights page done; `npm install` / `bun install` and build work; waits for a Python inference API (`PYTHON_API_URL`, contract in `frontend/README.md`). Team still has to choose Streamlit vs this frontend |
@@ -165,8 +166,97 @@ then re-run the ETL and confirm the report shows 0 leaks.
   majority-class baseline.
 - TF-IDF default tokenisation turns `<MBTI_TYPE>` into the token `mbti_type`; that is fine
   (it is identical for every type).
-- Save models under `models/` (git-ignored) with joblib. Planned app contract:
-  `predict(texts: list[str]) -> {"type": "INTP", "scores": {"EI": ..., "NS": ..., "FT": ..., "JP": ...}}`.
+- Labels: the 0/1 targets are the `*_label` columns (`EI_label` …); `EI` itself holds the letter.
+
+### Baseline code (src/models/)
+
+- `python -m src.models.train [--model logreg|svm|all] [--version v1] [--no-dw] [--final-test]`
+  (~a few minutes). Fits ONE TF-IDF (word 1–2-grams, `min_df=3`, `max_df=0.9`,
+  200k features, sublinear tf) on train users only, then per dimension tunes `C` on
+  validation Macro-F1 (`C_GRID` in `train.py`), saves `models/tfidf_<algo>.joblib`, the
+  report `reports/models/tfidf_<algo>_<version>.json` (metrics, chosen C, majority
+  baseline, top words per letter) and writes train+validation predictions to the DW via
+  `register_model` / `write_predictions` (skipped with a message if PostgreSQL is down).
+- `--final-test` also scores the test split. Use it **once**, for the final paper numbers.
+- `model.py` — `PersonaModel` (vectoriser + 4 classifiers, `scores_from_matrix`,
+  `predict_cleaned`, `top_features`, `save`/`load`). Scores are P(E), P(N), P(T), P(J);
+  > 0.5 means that letter. LinearSVC has no probabilities: its score is a sigmoid of the
+  decision value (uncalibrated, but on the same 0.5 threshold).
+- `evaluate.py` — `evaluate`, `majority_baseline`, `letters_to_type`, `format_table`.
+- `predict.py` — app contract:
+  `predict(texts) -> {"type", "scores": {"EI","NS","FT","JP"}, "n_words", "enough_text", "model"}`.
+  `texts` = posts of one person; runs `clean_text` on them first; `enough_text` is False
+  below `MIN_WORDS` (300) and the app must then show the "not enough text" warning.
+  Default model: `models/tfidf_logreg.joblib`.
+
+### Baseline results and caveats (read before using or changing the models)
+
+Final **test** results of v1 (Macro-F1; `--final-test` run on 2026-11-21; validation in brackets):
+
+| Model | E/I | N/S | T/F | J/P | 16 types | exact match |
+|---|---|---|---|---|---|---|
+| Majority baseline (always INFP) | 0.44 | 0.46 | 0.35 | 0.38 | 0.02 | 21.2% |
+| TF-IDF + LogReg | 0.655 (0.642) | 0.598 (0.615) | 0.788 (0.805) | 0.628 (0.633) | 0.201 (0.193) | 36.9% |
+| TF-IDF + LinearSVC | 0.656 (0.642) | 0.598 (0.615) | 0.790 (0.802) | 0.626 (0.635) | 0.197 (0.193) | 36.7% |
+
+Test ≈ validation, so the tuning did not overfit validation. Average 3.06 of 4 letters right
+(majority baseline: 2.78).
+
+1. **The test split is now used.** Never tune or pick a model by looking at test numbers.
+   A new model (v2, BERT …) is tuned on validation only and gets ONE `--final-test` run at
+   the end; all compared models must be reported on the same test split.
+2. **Re-running `train` without `--final-test` overwrites `reports/models/*_v1.json` and
+   drops the test metrics.** For experiments use a new `--version` (e.g. `--version v2`),
+   or re-run v1 with `--final-test` (results are deterministic: same C, same numbers).
+3. **Train-split predictions are in-sample** (train exact match 96% vs 35% on validation).
+   The DW holds predictions for all three splits; dashboard/report performance figures
+   must filter `split IN ('validation', 'test')`, never mix in `train`.
+4. **Masking placeholders are among the top features** (e.g. `typology_term`,
+   `mbti_type are`, `dear mbti_type`, `mbti_term` push towards E and S). Not direct
+   leakage (the token is identical for every type) but an indirect "talks about types"
+   signal. Planned ablation for the paper: drop the placeholder tokens and compare.
+5. **N/S is the weakest axis**: best C is at the low end of the grid (0.01 LogReg,
+   0.001 SVM) with tiny gains (0.609 → 0.615). The signal is weak; more C tuning won't help.
+6. **Scores are not real-world probabilities.** `class_weight="balanced"` trains as if
+   both letters were equally common, and the SVM score is an uncalibrated sigmoid. The
+   app must not say "73% chance you are E"; use wording like "leans towards E".
+7. **Domain and length:** trained on long PersonalityCafe forum histories (~1,300 words
+   per user). Short or non-forum text (tweets, one paragraph) is out of domain; keep the
+   `enough_text` warning. Labels are self-reported MBTI, not a diagnosis.
+8. Models are fit on train only (no refit on train+validation); top words per letter are
+   in the report JSONs (`top_features`), useful for the paper's interpretation section.
+
+### Improvement backlog (not started — team will revisit)
+
+Realistic expectation: a few points (≈ +0.02–0.05 Macro-F1); labels are self-reported and
+noisy. Every idea is compared on **validation only**; the chosen version gets one
+`--version v2 --final-test` run. Planned order: v2 = ideas 1–4 together (measure each one's
+contribution on validation), then 6 if time allows, BERT (8) last.
+
+**Easy (hours, current code):**
+1. **Per-axis decision threshold** tuned on validation instead of 0.5 (test recall is only
+   41% for E and 21% for S). Cheapest gain for minority letters.
+2. **Character n-grams** (e.g. `char_wb` 2–5) next to word n-grams: captures style such as
+   `:)`, `xD`, `...`, `!!!`, capitalisation.
+3. **Stylistic features**: post length, links per post, `?`/`!` rate, first-person
+   (`I/me/my`) vs `we/you` rate, etc. Easy to interpret in the paper.
+4. **Refit on train + validation** after choosing hyper-parameters (+33% data).
+5. **Tune TF-IDF too** (`max_features`, `ngram_range`, `min_df`), not only `C`.
+
+**Medium (1–2 days):**
+6. **Sentence embeddings** (e.g. `sentence-transformers/all-MiniLM-L6-v2`, no fine-tuning;
+   average post embeddings per user) + LogReg, alone and combined with TF-IDF. CPU is fine
+   but embedding ~400k posts takes about an hour; cache the vectors.
+7. **Smarter 16-type decision**: score all 16 types from the four probabilities (optionally
+   with priors) instead of picking letters independently; v1 never got ESTJ/ESFJ/ESFP right.
+
+**Hard (only if time allows):**
+8. **Fine-tune BERT/RoBERTa**: needs a GPU (Colab); 512-token limit vs ~1,300 words per
+   user → chunk and average. On this data usually only a few points over TF-IDF.
+
+**For the paper (credibility, not accuracy):**
+9. **Bootstrap confidence intervals** on test metrics, to show whether model differences are real.
+10. **Placeholder ablation** (caveat 4): drop `mbti_type`/`typology_term`/… tokens and compare.
 
 ## Repo layout
 
@@ -177,10 +267,11 @@ data/raw/          HF downloads (ignored)      data/processed/  ETL output (igno
 models/            trained models (ignored)
 notebooks/         01_eda.ipynb
 reports/etl/       ETL data-quality reports     reports/figures/ EDA charts
+reports/models/    model reports (metrics, chosen C, top words)
 src/data_loader.py load_mbti(), load_clean()
 src/etl/           cleaning.py (rules), clean_leakage.py (ETL step)
 src/dw/            schema.sql, db.py (engine/.env), load_dw.py (DW load), predictions.py
-src/models/        training / evaluation code (empty)
+src/models/        model.py, train.py, evaluate.py, predict.py
 tests/             pytest
 ```
 
