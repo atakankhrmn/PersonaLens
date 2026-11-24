@@ -8,6 +8,21 @@ and a BI dashboard for data profiling and model evaluation.
 > ⚠️ MBTI has known scientific limitations. This project does not provide psychological
 > diagnoses; predictions are probabilistic model outputs, not definitive personality assessments.
 
+![PersonaLens home page](docs/screenshots/home.png)
+
+## The Web App
+
+Paste a writing sample (or several separate posts) and PersonaLens predicts a four-letter
+type. Each axis shows which way the writing leans and how strongly; the scores are model
+scores from class-balanced classifiers, not real-world probabilities. Below 300 words the
+app warns that there is not enough text.
+
+![Prediction result: predicted type and how the writing leans on each axis](docs/screenshots/prediction-result.png)
+
+The **Data Insights** page reads everything live from the data warehouse and the
+`reports/` files: dataset overview, MBTI distribution, ETL and data quality, the star schema,
+and model performance. The sections below show the matching screens.
+
 ## Architecture
 
 ```
@@ -19,7 +34,7 @@ PostgreSQL Data Warehouse
     ↓
 ML Model (TF-IDF + Logistic Regression; SVM as baseline comparison)
     ↓
-Streamlit App & BI Dashboard
+Web App (React + FastAPI) & Power BI Dashboard
 ```
 
 ## Approach
@@ -38,6 +53,8 @@ Streamlit App & BI Dashboard
 ~8,675 users, ~50 forum posts each, 16 MBTI labels. Note: the data comes from the
 PersonalityCafe forum, not from Twitter/X.
 
+![MBTI distribution: users per type, per axis, per group, and post volume per type](docs/screenshots/mbti-distribution.png)
+
 ## Tech Stack
 
 | Technology | Purpose |
@@ -45,8 +62,9 @@ PersonalityCafe forum, not from Twitter/X.
 | Python, Pandas | Data processing and ETL |
 | scikit-learn | ML models and evaluation |
 | PostgreSQL | Data warehouse |
-| Streamlit | User interface and dashboard |
-| Power BI | Optional additional BI visualizations |
+| FastAPI | Python API for predictions and Data Insights |
+| React, Vite, Express | Web app (user interface) |
+| Power BI | BI dashboard on the warehouse views |
 
 ## Getting Started
 
@@ -104,7 +122,9 @@ All 8,675 users are kept; ~2,150 of ~409k posts (0.5%) are dropped and 2,187 enc
 artefacts are fixed. An independent check with different regexes finds no remaining
 type codes, temperaments, cognitive functions or "MBTI" words.
 
-Run the tests with `python -m pytest`. The Streamlit app must call the same
+![ETL and data quality: leakage before and after cleaning for the three configs](docs/screenshots/etl-data-quality.png)
+
+Run the tests with `python -m pytest`. The app must call the same
 `src.etl.cleaning.clean_text` on user input so training and prediction text are cleaned identically.
 
 ### Loading data in your code
@@ -155,6 +175,8 @@ BI views: `vw_type_distribution`, `vw_dimension_distribution`, `vw_user_profile`
 `vw_model_dimension_metrics` (Macro-F1 / Balanced Accuracy per dimension) and
 `vw_model_type_metrics` (precision / recall / F1 per MBTI type). Filter model views to
 `split IN ('validation', 'test')`; train predictions are in-sample.
+
+![Data Warehouse tab: live star schema with row counts, columns and keys](docs/screenshots/data-warehouse.png)
 
 ### Setup (once per machine)
 
@@ -230,6 +252,10 @@ Test: 36.9% exact 16-type match (majority baseline 21.2%), 3.06 of 4 letters rig
 Known caveats (in-sample train predictions, placeholder tokens as features, scores are not
 real-world probabilities, …) are listed in [AGENTS.md](AGENTS.md#baseline-results-and-caveats-read-before-using-or-changing-the-models). T/F is the easiest axis,
 N/S the hardest. Top words per letter are in `reports/models/*.json`.
+
+![Model Performance tab: test metrics per axis and model comparison with the majority baseline](docs/screenshots/model-performance.png)
+
+![16-type confusion matrix on the test split](docs/screenshots/confusion-matrix.png)
 
 Using a model (e.g. in the app):
 
