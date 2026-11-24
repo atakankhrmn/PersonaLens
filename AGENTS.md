@@ -33,7 +33,7 @@ the app must show cautious wording and a "not enough text" warning.
 | Streamlit app | ⏸ not needed for now — the web frontend below is the app |
 | Python API (`src/api/`, FastAPI) | ✅ done — `python -m src.api` (port 8000): `POST /api/analyze` (trained `tfidf_logreg v1`, `clean_posts`, logs type + scores to DW, never the text), `GET /api/insights/{overview,types,dimensions,etl,models,warehouse}` from the DW + `reports/`; 11 API tests + 2 DW tests |
 | Web frontend (`frontend/`, React + Vite + Express proxy) | ✅ connected — proxies to the Python API (default `http://127.0.0.1:8000`); Data Insights shows real DW/report data (Data Warehouse tab: live star schema with row counts, columns, keys, load history, BI views and design decisions; type & dimension distributions, posts per type, ETL reports, validation/test model metrics vs majority baseline, 16×16 confusion matrix, precision / recall / F1 per type, top words per letter); result page shows each side as a % with "leans towards" wording and a note that it is a model score, not a real-world chance (caveat 6) |
-| BI dashboard | ⏳ not started |
+| BI dashboard | ✅ done (v1, Eda) — `dashboard/PersonaLens.pbix` (Power BI Desktop, Import mode on the `dw` views; see `dashboard/README.md`). Pages: Veri Profili, Veri Kalitesi, Model Performansı, Confusion Matrix. Model pages use a `Split` table (validation/test only, single-select slicer, default test) + TREATAS measures, so train predictions are never shown. New views `vw_model_dimension_metrics`, `vw_model_type_metrics` |
 
 Team roles: Data Engineer (ETL + DW), ML Engineer (models + evaluation),
 App Developer (Streamlit), BI & Analysis lead (EDA, dashboard, report, presentation).
@@ -95,6 +95,17 @@ otherwise `initdb` fails on "Turkish_Türkiye.1254".
 - The dataset has no post timestamps: never invent dates; `dim_date` is only for load and
   prediction dates.
 - Main source code: `personalitycafe/label_clean+leak_masked`.
+- BI views: `vw_type_distribution`, `vw_dimension_distribution`, `vw_user_profile`,
+  `vw_posts_by_type`, `vw_data_quality_latest`, `vw_model_performance` (accuracy),
+  `vw_confusion_matrix`, `vw_model_dimension_metrics` (per model × split × dimension:
+  tp/fp/fn/tn, recall/precision/F1 per letter, **Macro-F1, Balanced Accuracy** — computed like
+  scikit-learn, checked against it) and `vw_model_type_metrics` (per model × split × type:
+  support, precision, recall, F1; 16-type Macro-F1 = `AVG(f1) WHERE in_scope`).
+  **Dashboards must filter `split IN ('validation', 'test')`** — train predictions are in-sample.
+- `CREATE OR REPLACE VIEW` can only add columns at the END of a view; never insert a column in
+  the middle of an existing view (PostgreSQL rejects it on databases that already have it).
+- The Power BI report connects in Import mode to the views only (never to `fact_post`,
+  which holds 400k post texts).
 - `tests/test_dw.py` integration tests use a throw-away `personalens_test` database and are
   skipped when PostgreSQL is not reachable.
 - Schema changes: edit `schema.sql` with `IF NOT EXISTS` / `CREATE OR REPLACE`; for a column
@@ -304,6 +315,7 @@ app/               Streamlit app (empty, not used; the web frontend is the app)
 frontend/          React + Vite UI, Express proxy to the Python API (see frontend/README.md)
 data/raw/          HF downloads (ignored)      data/processed/  ETL output (ignored)
 models/            trained models (ignored)
+dashboard/         Power BI report PersonaLens.pbix + README (pages, refresh steps)
 notebooks/         01_eda.ipynb
 reports/etl/       ETL data-quality reports     reports/figures/ EDA charts
 reports/models/    model reports (metrics, chosen C, top words)

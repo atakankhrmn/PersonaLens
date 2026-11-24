@@ -151,7 +151,10 @@ erDiagram
 
 The dataset has no post dates, so `dim_date` only holds real dates (load date, prediction date).
 BI views: `vw_type_distribution`, `vw_dimension_distribution`, `vw_user_profile`,
-`vw_posts_by_type`, `vw_data_quality_latest`, `vw_model_performance`, `vw_confusion_matrix`.
+`vw_posts_by_type`, `vw_data_quality_latest`, `vw_model_performance`, `vw_confusion_matrix`,
+`vw_model_dimension_metrics` (Macro-F1 / Balanced Accuracy per dimension) and
+`vw_model_type_metrics` (precision / recall / F1 per MBTI type). Filter model views to
+`split IN ('validation', 'test')`; train predictions are in-sample.
 
 ### Setup (once per machine)
 
@@ -240,6 +243,16 @@ predict(["first post ...", "second post ..."])
 The input is cleaned with the same `clean_posts` as the training data; `enough_text` is
 False below 300 words and the app must show a warning then.
 
+## BI Dashboard (Power BI)
+
+`dashboard/PersonaLens.pbix` is a Power BI Desktop report on the warehouse views (Import
+mode). Pages: dataset profile, data quality (leakage before/after cleaning), model
+performance (Macro-F1 / Balanced Accuracy per dimension, per-type F1, 16-type Macro-F1 and
+exact match) and the confusion matrix. A single-select slicer switches between the test
+and validation splits; train predictions are never shown. Open it, set your own PostgreSQL
+password under *Data source settings* if asked, and press *Refresh* — details in
+[dashboard/README.md](dashboard/README.md).
+
 ## Project Structure
 
 ```
@@ -249,6 +262,7 @@ PersonaLens/
 ├── data/
 │   ├── raw/          # downloaded dataset (not tracked by git)
 │   └── processed/    # ETL outputs (not tracked by git)
+├── dashboard/        # Power BI report (PersonaLens.pbix) and its README
 ├── models/           # trained model files (not tracked by git)
 ├── notebooks/        # EDA and experiments
 ├── reports/
@@ -285,5 +299,5 @@ The full project plan (in Turkish) is available in [MBTI_DW_Proje_Plani.md](MBTI
 
 ## Status
 
-🚧 EDA, cleaning ETL, PostgreSQL data warehouse, baseline models, Python API and web app
-connected. Next: model improvements (v2) and the paper.
+🚧 EDA, cleaning ETL, PostgreSQL data warehouse, baseline models, Python API, web app and
+Power BI dashboard done. Next: presentation, the paper and (optionally) model improvements (v2).
