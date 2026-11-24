@@ -43,6 +43,8 @@ export interface DatasetOverviewMetrics {
   sourceName: string;
   sourcePlatformNote: string;
   mainConfigName: string;
+  /** Users per split from dw.dim_user (only when served by the API). */
+  splitUsers?: Partial<Record<Exclude<DatasetSplit, 'all'>, number>>;
 }
 
 /**
@@ -55,6 +57,7 @@ export interface MbtiTypeDistributionRow {
   users: number;
   pct_of_split?: number;
   posts?: number;
+  words?: number;
   posts_per_user?: number;
   avg_words_per_post?: number;
   words_per_user?: number;
@@ -70,25 +73,41 @@ export interface DimensionDistributionRow {
   pct: number;
 }
 
+export type DimensionKey = 'EI' | 'NS' | 'FT' | 'JP';
+
+export interface DimensionMetrics {
+  macro_f1: number;
+  balanced_accuracy: number;
+  accuracy: number;
+}
+
 /**
- * Matches dw.dim_model + dw.vw_model_performance
+ * Metrics of one model on one split, from reports/models/<model>_<version>.json
+ * (computed with scikit-learn by src.models.train). Only validation and test are served:
+ * train predictions are in-sample (AGENTS.md caveat 3).
  */
 export interface ModelPerformanceRow {
   model_name: string;
   model_version: string;
   algorithm: string;
-  split: Exclude<DatasetSplit, 'all'>;
-  users: number;
+  split: 'validation' | 'test';
+  /** 16-type exact match (all four letters right). */
   type_accuracy: number;
+  /** 16-type Macro-F1 / Balanced Accuracy. */
+  macro_f1: number;
+  balanced_accuracy: number;
+  mean_letters_correct?: number | null;
   ei_accuracy: number;
   ns_accuracy: number;
   ft_accuracy: number;
   jp_accuracy: number;
-  macro_f1?: number | null;
-  balanced_accuracy?: number | null;
-  precision?: number | null;
-  recall?: number | null;
+  dimensions: Record<DimensionKey, DimensionMetrics>;
+  /** Only set on majority-baseline rows. */
+  majority_type?: string | null;
 }
+
+/** Top TF-IDF words per letter, e.g. topFeatures["tfidf_logreg v1"].EI.E */
+export type TopFeatures = Record<string, Partial<Record<DimensionKey, Record<string, string[]>>>>;
 
 /**
  * Matches dw.vw_confusion_matrix
@@ -96,7 +115,7 @@ export interface ModelPerformanceRow {
 export interface ConfusionMatrixCell {
   model_name: string;
   model_version: string;
-  split: Exclude<DatasetSplit, 'all'>;
+  split: 'validation' | 'test';
   true_type: MbtiCode;
   predicted_type: MbtiCode;
   users: number;

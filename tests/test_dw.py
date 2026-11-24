@@ -213,3 +213,23 @@ def test_quality_only_load_keeps_posts(loaded):
     assert _scalar(engine, "SELECT COUNT(*) FROM dw.fact_post") == 3  # main posts untouched
     assert _scalar(engine, "SELECT COUNT(DISTINCT source_key) FROM dw.fact_post") == 1
     assert _scalar(engine, """SELECT COUNT(DISTINCT source_code) FROM dw.vw_data_quality_latest""") == 2
+
+
+def test_api_insights_on_warehouse(loaded):
+    from src.api import insights
+
+    engine, *_ = loaded
+    ov = insights.overview(engine)
+    assert ov["totalUsers"] == 2 and ov["cleanedPosts"] == 3 and ov["personalityTypes"] == 2
+    assert ov["splitUsers"] == {"train": 1, "test": 1}
+
+    types = {(r["type_code"], r["split"]): r for r in insights.type_distribution(engine)}
+    assert set(types) == {("INTP", "train"), ("ESFJ", "test")}
+    intp = types[("INTP", "train")]
+    assert intp["temperament"] == "analysts" and intp["users"] == 1 and intp["posts"] == 2
+    assert intp["pct_of_split"] == 100.0
+    assert types[("ESFJ", "test")]["temperament"] == "sentinels"
+
+    dims = insights.dimension_distribution(engine)
+    assert len(dims) == 8 and sum(d["users"] for d in dims) == 8
+    assert [d["dimension"] for d in dims][:2] == ["E/I", "E/I"]

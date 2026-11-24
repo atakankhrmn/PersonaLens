@@ -6,9 +6,9 @@
     #  "scores": {"EI": 0.21, "NS": 0.83, "FT": 0.66, "JP": 0.31},   # P(E), P(N), P(T), P(J)
     #  "n_words": 512, "enough_text": True, "model": "tfidf_logreg v1"}
 
-The raw user text is cleaned with the SAME ``clean_text`` as the training data
-(encoding fixes + MBTI/typology masking), so a user writing "I'm an INFJ" cannot
-leak the answer. The text is never stored.
+The raw user text is cleaned with the SAME ``clean_posts`` as the training data
+(encoding fixes + MBTI/typology masking, empty / placeholder-only / duplicate posts
+dropped), so a user writing "I'm an INFJ" cannot leak the answer. The text is never stored.
 
 Results are self-reported-MBTI style guesses from writing style, not a diagnosis.
 """
@@ -19,7 +19,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from src.data_loader import PROJECT_ROOT
-from src.etl.cleaning import clean_text
+from src.etl.cleaning import clean_posts
 from src.models.evaluate import DIMS
 from src.models.model import POST_SEP, PersonaModel
 
@@ -45,7 +45,7 @@ def predict(texts: list[str], model: PersonaModel | str | Path | None = None) ->
     if not isinstance(model, PersonaModel):
         model = load_model(model or DEFAULT_MODEL)
 
-    posts = [clean_text(t) for t in texts if t and t.strip()]
+    posts = clean_posts([t for t in texts if t and t.strip()])
     text = f" {POST_SEP} ".join(posts)
     n_words = sum(len(p.split()) for p in posts)
 
@@ -55,5 +55,8 @@ def predict(texts: list[str], model: PersonaModel | str | Path | None = None) ->
         "scores": {dim: round(float(scores[dim][0]), 4) for dim in DIMS},
         "n_words": n_words,
         "enough_text": n_words >= MIN_WORDS,
+        "n_posts": len(posts),
         "model": f"{model.name} {model.version}",
+        "model_name": model.name,
+        "model_version": model.version,
     }

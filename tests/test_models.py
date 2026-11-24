@@ -126,7 +126,9 @@ def test_save_and_load_roundtrip(trained, tmp_path):
 def test_predict_contract(trained):
     model = trained[0]
     out = predict(["I love a party and new ideas", "logic and plans all day"], model=model)
-    assert set(out) == {"type", "scores", "n_words", "enough_text", "model"}
+    assert set(out) == {"type", "scores", "n_words", "n_posts", "enough_text", "model",
+                        "model_name", "model_version"}
+    assert out["n_posts"] == 2
     assert len(out["type"]) == 4
     assert set(out["scores"]) == set(ev.DIMS)
     assert out["enough_text"] is (out["n_words"] >= MIN_WORDS)
@@ -134,7 +136,7 @@ def test_predict_contract(trained):
 
 
 def test_predict_masks_self_reported_type(trained, monkeypatch):
-    """A user typing their type must not reach the model: input goes through clean_text."""
+    """A user typing their type must not reach the model: input goes through clean_posts."""
     seen = {}
     model = trained[0]
     original = model.predict_cleaned

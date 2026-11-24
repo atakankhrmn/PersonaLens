@@ -29,8 +29,9 @@ the app must show cautious wording and a "not enough text" warning.
 | Baseline models (4 binary classifiers) | ✅ done — `src/models/` (train, evaluate, predict), `reports/models/`; **final test** Macro-F1 LogReg: EI 0.66, NS 0.60, FT 0.79, JP 0.63, 16-type 0.20 (majority 0.02), exact match 36.9% (majority 21.2%); SVM ≈ same; all splits' predictions in DW, 11 tests. Test split now used — see "Baseline results and caveats" |
 | Model improvements (v2) | ⏳ planned, not started — ideas listed in "Improvement backlog" below |
 | PostgreSQL star schema + DW load | ✅ done — `src/dw/` (schema.sql, load_dw.py, predictions.py), main source (label_clean) posts + quality metrics of all 3 configs, 16 tests |
-| Streamlit app | ⏳ not started |
-| Web frontend (`frontend/`, React + Vite + Express proxy) | 🚧 in progress — UI, "not enough text" warning (< 300 words) and Data Insights page done; `npm install` / `bun install` and build work; waits for a Python inference API (`PYTHON_API_URL`, contract in `frontend/README.md`). Team still has to choose Streamlit vs this frontend |
+| Streamlit app | ⏸ not needed for now — the web frontend below is the app |
+| Python API (`src/api/`, FastAPI) | ✅ done — `python -m src.api` (port 8000): `POST /api/analyze` (trained `tfidf_logreg v1`, `clean_posts`, logs type + scores to DW, never the text), `GET /api/insights/{overview,types,dimensions,etl,models}` from the DW + `reports/`; 11 API tests + 1 DW test |
+| Web frontend (`frontend/`, React + Vite + Express proxy) | ✅ connected — proxies to the Python API (default `http://127.0.0.1:8000`); Data Insights shows real DW/report data (type & dimension distributions, posts per type, ETL reports, validation/test model metrics vs majority baseline, 16×16 confusion matrix, top words per letter); result page says "leans towards", not "% chance" (caveat 6) |
 | BI dashboard | ⏳ not started |
 
 Team roles: Data Engineer (ETL + DW), ML Engineer (models + evaluation),
@@ -60,6 +61,8 @@ python -m pytest                                  # run tests (must stay green)
 python -m src.etl.clean_leakage                   # build main training data (~2–4 min)
 python -m src.etl.clean_leakage --config all      # all three configs (quality reports)
 python -m src.dw.load_dw                          # load warehouse (~30 s)
+python -m src.api                                 # Python API on http://127.0.0.1:8000
+cd frontend; npm install; npm run dev             # web app on http://localhost:3000
 ```
 
 Always use the project `.venv` interpreter. In VS Code the Jupyter extension is required
@@ -129,8 +132,9 @@ train = df[df["split"] == "train"]
 
 ## Cleaning (src/etl/cleaning.py)
 
-`clean_text(text)` is the single entry point. **The Streamlit app must call the same
-`clean_text` on user input**, otherwise train and inference text differ.
+`clean_text(text)` is the single entry point. **The app must clean user input the same
+way** (`src.models.predict.predict` runs `clean_posts`, which uses `clean_text`), otherwise
+train and inference text differ.
 
 It fixes encoding artefacts (`isnx92t` → `isn't`, `x93`/`x94` → quotes, `x95` bullets,
 `u200b`) and masks typology vocabulary:
@@ -184,10 +188,29 @@ then re-run the ETL and confirm the report shows 0 leaks.
   decision value (uncalibrated, but on the same 0.5 threshold).
 - `evaluate.py` — `evaluate`, `majority_baseline`, `letters_to_type`, `format_table`.
 - `predict.py` — app contract:
-  `predict(texts) -> {"type", "scores": {"EI","NS","FT","JP"}, "n_words", "enough_text", "model"}`.
-  `texts` = posts of one person; runs `clean_text` on them first; `enough_text` is False
-  below `MIN_WORDS` (300) and the app must then show the "not enough text" warning.
-  Default model: `models/tfidf_logreg.joblib`.
+  `predict(texts) -> {"type", "scores": {"EI","NS","FT","JP"}, "n_words", "n_posts",
+  "enough_text", "model", "model_name", "model_version"}`.
+  `texts` = posts of one person; runs `clean_posts` on them first (same as the training
+  data: `clean_text`, then empty / placeholder-only / duplicate posts dropped); `n_words`
+  counts the cleaned words; `enough_text` is False below `MIN_WORDS` (300) and the app
+  must then show the "not enough text" warning. Default model: `models/tfidf_logreg.joblib`.
+
+### Python API (src/api/)
+
+- `python -m src.api [--port 8000] [--reload]` — FastAPI app in `app.py`, used by the web
+  frontend through its Express proxy (`frontend/server.ts`, `PYTHON_API_URL`).
+- `POST /api/analyze` `{"texts": [...], "input_mode": "single"|"multiple"}` →
+  `{"predicted_type", "scores", "model_version", "n_words", "n_posts", "enough_text",
+  "min_words", "logged_to_dw"}`. 400 `INVALID_INPUT` for empty input, > 50,000 characters,
+  > 200 posts, or nothing left after masking. If PostgreSQL is reachable the prediction is
+  logged with `log_app_prediction` (scores mapped `EI→score_e` … `JP→score_j`); the text is
+  never stored or logged. `PERSONALENS_NO_DW=1` turns the warehouse off (used in tests).
+- `GET /api/insights/*` (`insights.py`, cached 5 min): `overview`, `types` (type × split
+  with posts/words of the main source), `dimensions` (`vw_dimension_distribution`) need the
+  DW (503 otherwise); `etl` reads `reports/etl/*.json`; `models` reads
+  `reports/models/*.json` (sklearn metrics + majority baseline + top words) and
+  `dw.vw_confusion_matrix`. **Only validation and test are served, never train.**
+- `GET /health` → model loaded? warehouse reachable?
 
 ### Baseline results and caveats (read before using or changing the models)
 
@@ -261,7 +284,7 @@ contribution on validation), then 6 if time allows, BERT (8) last.
 ## Repo layout
 
 ```
-app/               Streamlit app (empty)
+app/               Streamlit app (empty, not used; the web frontend is the app)
 frontend/          React + Vite UI, Express proxy to the Python API (see frontend/README.md)
 data/raw/          HF downloads (ignored)      data/processed/  ETL output (ignored)
 models/            trained models (ignored)
@@ -272,6 +295,7 @@ src/data_loader.py load_mbti(), load_clean()
 src/etl/           cleaning.py (rules), clean_leakage.py (ETL step)
 src/dw/            schema.sql, db.py (engine/.env), load_dw.py (DW load), predictions.py
 src/models/        model.py, train.py, evaluate.py, predict.py
+src/api/           FastAPI backend: app.py (analyze + insights routes), insights.py
 tests/             pytest
 ```
 

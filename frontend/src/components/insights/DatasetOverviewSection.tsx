@@ -65,7 +65,7 @@ const PIPELINE_STAGES: PipelineStage[] = [
     label: 'Machine Learning',
     shortDesc: '4 binary classifiers',
     detail:
-      'Planned scikit-learn pipeline training four independent binary classifiers (E/I, N/S, T/F, J/P) using class_weight="balanced" on user-level stratified splits.',
+      'TF-IDF (word 1–2-grams) + Logistic Regression / Linear SVM: four independent binary classifiers (E/I, N/S, T/F, J/P) with class_weight="balanced", C tuned on validation, evaluated once on the held-out test split. Results are in the Model Performance tab.',
     icon: BrainCircuit,
     bgHex: '#F4EFF7',
     borderHex: '#E1D2EB',
@@ -76,7 +76,7 @@ const PIPELINE_STAGES: PipelineStage[] = [
     label: 'PersonaLens',
     shortDesc: 'Interactive discovery UI',
     detail:
-      'Connects via POST /api/analyze for single-text and multi-post inference without storing user text, paired with this BI dashboard for transparent evaluation.',
+      'FastAPI backend (src.api) serves POST /api/analyze with the trained model and the /api/insights endpoints from the warehouse. User text is never stored; only the predicted type and scores are logged.',
     icon: Sparkles,
     bgHex: '#FDF6E6',
     borderHex: '#F2DFB0',

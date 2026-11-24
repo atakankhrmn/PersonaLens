@@ -32,7 +32,7 @@ export const PERSONALITY_GROUPS: Record<PersonalityGroupId, GroupTheme> = {
   sentinels: {
     id: 'sentinels',
     name: 'Sentinels',
-    tagline: 'Observant (S) and Judging (J)',
+    tagline: 'Sensing (S) and Judging (J)',
     description:
       'Grounded, conscientious, and dependable organizers who build stability, clarity, and lasting community trust.',
     accentHex: '#4298B4',
@@ -46,7 +46,7 @@ export const PERSONALITY_GROUPS: Record<PersonalityGroupId, GroupTheme> = {
   explorers: {
     id: 'explorers',
     name: 'Explorers',
-    tagline: 'Observant (S) and Prospecting (P)',
+    tagline: 'Sensing (S) and Perceiving (P)',
     description:
       'Adaptable, observant, and spontaneous makers who learn by doing and bring kinetic energy to every moment.',
     accentHex: '#D99B26',

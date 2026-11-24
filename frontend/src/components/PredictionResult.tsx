@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, Info, Layers, RotateCcw } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Info, Layers, RotateCcw } from 'lucide-react';
 import { PERSONALITY_GROUPS, PERSONALITY_MAP } from '../data/personalities';
 import { MbtiDimensionScores, PredictionResult as PredictionResultData } from '../types/personality';
 import { PersonalityIllustration } from './PersonalityIllustration';
@@ -21,9 +21,17 @@ interface DimensionAxisConfig {
 
 /**
  * Repository convention (src/dw/predictions.py & AGENTS.md):
- * EI = P(E), NS = P(N), FT = P(T), JP = P(J).
+ * EI = score of E, NS = score of N, FT = score of T, JP = score of J (> 0.5 = that letter).
  * Left side shows the 0-pole (I, S, F, P) and right side shows the 1-pole (E, N, T, J).
+ * Scores come from class-balanced classifiers, so they are NOT real-world probabilities
+ * (AGENTS.md caveat 6): the UI says "leans towards", never "% chance".
  */
+function leanLabel(score: number): string {
+  const distance = Math.abs(score - 0.5);
+  if (distance < 0.1) return 'Slight lean';
+  if (distance < 0.25) return 'Moderate lean';
+  return 'Clear lean';
+}
 const DIMENSION_AXES: DimensionAxisConfig[] = [
   {
     key: 'EI',
@@ -36,7 +44,7 @@ const DIMENSION_AXES: DimensionAxisConfig[] = [
     key: 'NS',
     leftCode: 'S',
     rightCode: 'N',
-    leftLabel: 'Observant',
+    leftLabel: 'Sensing',
     rightLabel: 'Intuitive',
   },
   {
@@ -50,7 +58,7 @@ const DIMENSION_AXES: DimensionAxisConfig[] = [
     key: 'JP',
     leftCode: 'P',
     rightCode: 'J',
-    leftLabel: 'Prospecting',
+    leftLabel: 'Perceiving',
     rightLabel: 'Judging',
   },
 ];
@@ -155,26 +163,47 @@ export const PredictionResult: React.FC<PredictionResultProps> = ({
 
         {/* Dimension Bars (only rendered when backend returns valid scores) & Profile Details */}
         <div className="p-8 sm:p-10 space-y-10 bg-white">
+          {result.enoughText === false && (
+            <div
+              role="alert"
+              className="rounded-2xl bg-[#FEF6E7] border border-[#F2DFB0] p-4 sm:p-5 flex items-start gap-3"
+            >
+              <AlertTriangle className="w-5 h-5 text-[#B7791F] shrink-0 mt-0.5" />
+              <div className="text-xs sm:text-sm text-[#5C4A1E] leading-relaxed">
+                <strong className="font-semibold">Not enough text:</strong> only{' '}
+                {result.analyzedWordCount} words were left after cleaning (at least{' '}
+                {result.minWords} recommended). The model was trained on whole forum histories
+                (~1,300 words per user), so this result is close to a guess.
+              </div>
+            </div>
+          )}
+
           {result.scores && (
             <div className="space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-2">
                 <h2 className="font-display text-2xl font-bold text-[#1E2430]">
-                  Four Dimension Probabilities
+                  Which Way the Writing Leans
                 </h2>
                 <span className="text-xs text-[#6B7280] tabular-nums">
                   {result.analyzedPostCount}{' '}
                   {result.analyzedPostCount === 1 ? 'post' : 'posts'} ·{' '}
                   {result.analyzedWordCount}{' '}
-                  {result.analyzedWordCount === 1 ? 'word' : 'words'} submitted
+                  {result.analyzedWordCount === 1 ? 'word' : 'words'} analyzed after cleaning
                 </span>
               </div>
+              <p className="text-xs text-[#6B7280] leading-relaxed -mt-3">
+                Bars show the model score for each axis (0.5 = undecided). The classifiers are
+                trained class-balanced, so a score is a direction and strength, not a percentage
+                chance of being that letter.
+              </p>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {DIMENSION_AXES.map((axis) => {
                   const probRight = result.scores![axis.key];
                   const rightPct = Math.round(probRight * 100);
                   const leftPct = 100 - rightPct;
-                  const isRightDominant = probRight >= 0.5;
+                  const isRightDominant = probRight > 0.5;
+                  const lean = leanLabel(probRight);
 
                   return (
                     <div
@@ -187,19 +216,13 @@ export const PredictionResult: React.FC<PredictionResultProps> = ({
                             !isRightDominant ? 'text-[#1E2430]' : 'text-[#6B7280]'
                           }`}
                         >
-                          {axis.leftLabel} ({axis.leftCode}){' '}
-                          <span className="font-mono text-xs tabular-nums">
-                            {leftPct}%
-                          </span>
+                          {axis.leftLabel} ({axis.leftCode})
                         </span>
                         <span
                           className={`font-semibold ${
                             isRightDominant ? 'text-[#1E2430]' : 'text-[#6B7280]'
                           }`}
                         >
-                          <span className="font-mono text-xs tabular-nums">
-                            {rightPct}%
-                          </span>{' '}
                           {axis.rightLabel} ({axis.rightCode})
                         </span>
                       </div>
@@ -208,14 +231,12 @@ export const PredictionResult: React.FC<PredictionResultProps> = ({
                         className="h-3 w-full rounded-full overflow-hidden flex"
                         style={{ backgroundColor: group.barTrackHex }}
                         role="progressbar"
-                        aria-valuenow={isRightDominant ? rightPct : leftPct}
-                        aria-valuemin={50}
+                        aria-valuenow={rightPct}
+                        aria-valuemin={0}
                         aria-valuemax={100}
-                        aria-label={`${axis.key} probability: ${
-                          isRightDominant
-                            ? `${rightPct}% ${axis.rightCode}`
-                            : `${leftPct}% ${axis.leftCode}`
-                        }`}
+                        aria-label={`${axis.key}: ${lean.toLowerCase()} towards ${
+                          isRightDominant ? axis.rightCode : axis.leftCode
+                        } (score ${probRight.toFixed(2)})`}
                       >
                         <div
                           className="h-full transition-all duration-500"
@@ -234,9 +255,11 @@ export const PredictionResult: React.FC<PredictionResultProps> = ({
                       </div>
 
                       <div className="flex items-center justify-between text-xs text-[#6B7280]">
-                        <span>Axis {axis.key}</span>
+                        <span className="font-semibold text-[#374151]">
+                          {lean} towards {isRightDominant ? axis.rightCode : axis.leftCode}
+                        </span>
                         <span className="font-mono tabular-nums">
-                          P({axis.rightCode}) = {probRight.toFixed(2)}
+                          score({axis.rightCode}) = {probRight.toFixed(2)}
                         </span>
                       </div>
                     </div>

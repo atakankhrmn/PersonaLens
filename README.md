@@ -167,6 +167,17 @@ python -m src.etl.clean_leakage --config all   # if data/processed/ is empty
 python -m src.dw.load_dw                       # ~30 s, safe to re-run
 ```
 
+### Running the web app
+
+```powershell
+python -m src.api                     # terminal 1: Python API (model + insights) on :8000
+cd frontend; npm install; npm run dev # terminal 2: web app on http://localhost:3000
+```
+
+The web server proxies `/api/*` to the Python API (`PYTHON_API_URL`, default
+`http://127.0.0.1:8000`). The Data Insights page reads the warehouse and the
+`reports/` JSON files; the analyzer uses `models/tfidf_logreg.joblib` (train it first).
+
 Browse the tables with pgAdmin 4 (installed with PostgreSQL) or connect Power BI to
 `localhost:5432`, database `personalens`, schema `dw`.
 
@@ -226,14 +237,14 @@ predict(["first post ...", "second post ..."])
 #  "n_words": 512, "enough_text": True, "model": "tfidf_logreg v1"}
 ```
 
-The input is cleaned with the same `clean_text` as the training data; `enough_text` is
+The input is cleaned with the same `clean_posts` as the training data; `enough_text` is
 False below 300 words and the app must show a warning then.
 
 ## Project Structure
 
 ```
 PersonaLens/
-├── app/              # Streamlit app
+├── app/              # Streamlit app (not used; the web frontend is the app)
 ├── frontend/         # React + Vite web UI with Express proxy (see frontend/README.md)
 ├── data/
 │   ├── raw/          # downloaded dataset (not tracked by git)
@@ -248,7 +259,8 @@ PersonaLens/
 │   ├── data_loader.py
 │   ├── etl/          # cleaning rules, leakage ETL
 │   ├── dw/           # star schema SQL, DW load, prediction writer
-│   └── models/       # training and evaluation code
+│   ├── models/       # training and evaluation code
+│   └── api/          # FastAPI backend for the web frontend (python -m src.api)
 └── tests/            # pytest unit tests
 ```
 
@@ -273,4 +285,5 @@ The full project plan (in Turkish) is available in [MBTI_DW_Proje_Plani.md](MBTI
 
 ## Status
 
-🚧 EDA, cleaning ETL, PostgreSQL data warehouse and baseline models done; Streamlit app next.
+🚧 EDA, cleaning ETL, PostgreSQL data warehouse, baseline models, Python API and web app
+connected. Next: model improvements (v2) and the paper.
