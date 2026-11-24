@@ -192,9 +192,9 @@ export const PredictionResult: React.FC<PredictionResultProps> = ({
                 </span>
               </div>
               <p className="text-xs text-[#6B7280] leading-relaxed -mt-3">
-                Bars show the model score for each axis (0.5 = undecided). The classifiers are
-                trained class-balanced, so a score is a direction and strength, not a percentage
-                chance of being that letter.
+                Percentages show how strongly the model's score points to each side of the axis
+                (50% / 50% = undecided). The classifiers are trained class-balanced, so they show
+                direction and strength, not the real-world chance of being that letter.
               </p>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -216,13 +216,15 @@ export const PredictionResult: React.FC<PredictionResultProps> = ({
                             !isRightDominant ? 'text-[#1E2430]' : 'text-[#6B7280]'
                           }`}
                         >
-                          {axis.leftLabel} ({axis.leftCode})
+                          {axis.leftLabel} ({axis.leftCode}){' '}
+                          <span className="font-mono tabular-nums">{leftPct}%</span>
                         </span>
                         <span
                           className={`font-semibold ${
                             isRightDominant ? 'text-[#1E2430]' : 'text-[#6B7280]'
                           }`}
                         >
+                          <span className="font-mono tabular-nums">{rightPct}%</span>{' '}
                           {axis.rightLabel} ({axis.rightCode})
                         </span>
                       </div>
@@ -259,7 +261,9 @@ export const PredictionResult: React.FC<PredictionResultProps> = ({
                           {lean} towards {isRightDominant ? axis.rightCode : axis.leftCode}
                         </span>
                         <span className="font-mono tabular-nums">
-                          score({axis.rightCode}) = {probRight.toFixed(2)}
+                          {isRightDominant ? axis.rightCode : axis.leftCode}{' '}
+                          {isRightDominant ? rightPct : leftPct}% · {isRightDominant ? axis.leftCode : axis.rightCode}{' '}
+                          {isRightDominant ? leftPct : rightPct}%
                         </span>
                       </div>
                     </div>
