@@ -151,7 +151,10 @@ erDiagram
 
 The dataset has no post dates, so `dim_date` only holds real dates (load date, prediction date).
 BI views: `vw_type_distribution`, `vw_dimension_distribution`, `vw_user_profile`,
-`vw_posts_by_type`, `vw_data_quality_latest`, `vw_model_performance`, `vw_confusion_matrix`.
+`vw_posts_by_type`, `vw_data_quality_latest`, `vw_model_performance`, `vw_confusion_matrix`,
+`vw_model_dimension_metrics` (Macro-F1 / Balanced Accuracy per dimension) and
+`vw_model_type_metrics` (precision / recall / F1 per MBTI type). Filter model views to
+`split IN ('validation', 'test')`; train predictions are in-sample.
 
 ### Setup (once per machine)
 
@@ -196,49 +199,15 @@ write_predictions(engine, key, preds)  # columns: user_id, predicted_type, score
 `vw_model_performance` and `vw_confusion_matrix` then show the results for the dashboard.
 The app uses `log_app_prediction(...)`, which stores the prediction but never the user's text.
 
-## Baseline Models
+## BI Dashboard (Power BI)
 
-Four binary classifiers (E/I, N/S, T/F, J/P) on TF-IDF word 1–2-grams, `class_weight="balanced"`,
-regularisation `C` tuned per dimension on the validation split. The four letters are combined
-into the 16-type prediction.
-
-```powershell
-python -m src.models.train            # train LogReg + SVM, save models/, reports/models/, write to DW
-python -m src.models.train --no-dw    # without PostgreSQL
-```
-
-Validation results (Macro-F1 / Balanced Accuracy):
-
-| Model | E/I | N/S | T/F | J/P | 16 types |
-|---|---|---|---|---|---|
-| Majority baseline | 0.44 / 0.50 | 0.46 / 0.50 | 0.35 / 0.50 | 0.38 / 0.50 | 0.02 / 0.06 |
-| TF-IDF + LogReg | 0.64 / 0.63 | 0.62 / 0.60 | 0.81 / 0.81 | 0.63 / 0.63 | 0.19 / 0.19 |
-| TF-IDF + LinearSVC | 0.64 / 0.64 | 0.62 / 0.60 | 0.80 / 0.80 | 0.64 / 0.63 | 0.19 / 0.19 |
-
-Final **test** results (Macro-F1 / Balanced Accuracy, one run with `--final-test`):
-
-| Model | E/I | N/S | T/F | J/P | 16 types |
-|---|---|---|---|---|---|
-| Majority baseline | 0.44 / 0.50 | 0.46 / 0.50 | 0.35 / 0.50 | 0.38 / 0.50 | 0.02 / 0.06 |
-| TF-IDF + LogReg | 0.66 / 0.65 | 0.60 / 0.58 | 0.79 / 0.79 | 0.63 / 0.63 | 0.20 / 0.20 |
-| TF-IDF + LinearSVC | 0.66 / 0.65 | 0.60 / 0.58 | 0.79 / 0.79 | 0.63 / 0.63 | 0.20 / 0.20 |
-
-Test: 36.9% exact 16-type match (majority baseline 21.2%), 3.06 of 4 letters right on average.
-Known caveats (in-sample train predictions, placeholder tokens as features, scores are not
-real-world probabilities, …) are listed in [AGENTS.md](AGENTS.md#baseline-results-and-caveats-read-before-using-or-changing-the-models). T/F is the easiest axis,
-N/S the hardest. Top words per letter are in `reports/models/*.json`.
-
-Using a model (e.g. in the app):
-
-```python
-from src.models.predict import predict
-predict(["first post ...", "second post ..."])
-# {"type": "INTP", "scores": {"EI": 0.21, "NS": 0.83, "FT": 0.66, "JP": 0.31},
-#  "n_words": 512, "enough_text": True, "model": "tfidf_logreg v1"}
-```
-
-The input is cleaned with the same `clean_posts` as the training data; `enough_text` is
-False below 300 words and the app must show a warning then.
+`dashboard/PersonaLens.pbix` is a Power BI Desktop report on the warehouse views (Import
+mode). Pages: dataset profile, data quality (leakage before/after cleaning), model
+performance (Macro-F1 / Balanced Accuracy per dimension, per-type F1, 16-type Macro-F1 and
+exact match) and the confusion matrix. A single-select slicer switches between the test
+and validation splits; train predictions are never shown. Open it, set your own PostgreSQL
+password under *Data source settings* if asked, and press *Refresh* — details in
+[dashboard/README.md](dashboard/README.md).
 
 ## Project Structure
 
@@ -249,6 +218,7 @@ PersonaLens/
 ├── data/
 │   ├── raw/          # downloaded dataset (not tracked by git)
 │   └── processed/    # ETL outputs (not tracked by git)
+├── dashboard/        # Power BI report (PersonaLens.pbix) and its README
 ├── models/           # trained model files (not tracked by git)
 ├── notebooks/        # EDA and experiments
 ├── reports/

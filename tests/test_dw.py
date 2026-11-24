@@ -196,6 +196,21 @@ def test_predictions_roundtrip(loaded):
     assert _scalar(engine, "SELECT SUM(users) FROM dw.vw_model_performance") == 2
     assert float(_scalar(engine, "SELECT AVG(type_accuracy) FROM dw.vw_model_performance")) == 0.5
 
+    # per-dimension metrics: pc_00001 (train) INTP -> INTP is fully right,
+    # pc_00002 (test) ESFJ -> INFP is right only on F
+    dim = f"FROM dw.vw_model_dimension_metrics WHERE model_name = 'test_model'"
+    assert _scalar(engine, f"SELECT COUNT(*) {dim}") == 8  # 2 splits x 4 dimensions
+    assert float(_scalar(engine, f"SELECT MIN(macro_f1) {dim} AND split = 'train'")) == 1.0
+    assert float(_scalar(engine, f"SELECT macro_f1 {dim} AND split = 'test' AND dimension = 'E/I'")) == 0.0
+    assert float(_scalar(engine, f"SELECT macro_f1 {dim} AND split = 'test' AND dimension = 'T/F'")) == 1.0
+    assert _scalar(engine, f"SELECT fn {dim} AND split = 'test' AND dimension = 'E/I'") == 1
+
+    typ = f"FROM dw.vw_model_type_metrics WHERE model_name = 'test_model'"
+    assert _scalar(engine, f"SELECT COUNT(*) {typ}") == 32  # 2 splits x 16 types
+    assert float(_scalar(engine, f"SELECT f1 {typ} AND split = 'train' AND type_code = 'INTP'")) == 1.0
+    assert float(_scalar(engine, f"SELECT AVG(f1) {typ} AND split = 'test' AND in_scope")) == 0.0
+    assert _scalar(engine, f"SELECT COUNT(*) {typ} AND split = 'test' AND in_scope") == 2  # ESFJ, INFP
+
     log_app_prediction(engine, key, "ENFP", {"score_e": 0.8}, n_posts=3, n_words=120)
     assert _scalar(engine, """SELECT COUNT(*) FROM dw.fact_prediction
                               WHERE user_key IS NULL AND model_key = """ + str(key)) == 1
