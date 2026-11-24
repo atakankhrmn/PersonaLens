@@ -31,8 +31,8 @@ the app must show cautious wording and a "not enough text" warning.
 | Model improvements (v2) | ⏳ planned, not started — ideas listed in "Improvement backlog" below |
 | PostgreSQL star schema + DW load | ✅ done — `src/dw/` (schema.sql, load_dw.py, predictions.py), main source (label_clean) posts + quality metrics of all 3 configs, 16 tests |
 | Streamlit app | ⏸ not needed for now — the web frontend below is the app |
-| Python API (`src/api/`, FastAPI) | ✅ done — `python -m src.api` (port 8000): `POST /api/analyze` (trained `tfidf_logreg v1`, `clean_posts`, logs type + scores to DW, never the text), `GET /api/insights/{overview,types,dimensions,etl,models}` from the DW + `reports/`; 11 API tests + 1 DW test |
-| Web frontend (`frontend/`, React + Vite + Express proxy) | ✅ connected — proxies to the Python API (default `http://127.0.0.1:8000`); Data Insights shows real DW/report data (type & dimension distributions, posts per type, ETL reports, validation/test model metrics vs majority baseline, 16×16 confusion matrix, top words per letter); result page shows each side as a % with "leans towards" wording and a note that it is a model score, not a real-world chance (caveat 6) |
+| Python API (`src/api/`, FastAPI) | ✅ done — `python -m src.api` (port 8000): `POST /api/analyze` (trained `tfidf_logreg v1`, `clean_posts`, logs type + scores to DW, never the text), `GET /api/insights/{overview,types,dimensions,etl,models,warehouse}` from the DW + `reports/`; 11 API tests + 2 DW tests |
+| Web frontend (`frontend/`, React + Vite + Express proxy) | ✅ connected — proxies to the Python API (default `http://127.0.0.1:8000`); Data Insights shows real DW/report data (Data Warehouse tab: live star schema with row counts, columns, keys, load history, BI views and design decisions; type & dimension distributions, posts per type, ETL reports, validation/test model metrics vs majority baseline, 16×16 confusion matrix, top words per letter); result page shows each side as a % with "leans towards" wording and a note that it is a model score, not a real-world chance (caveat 6) |
 | BI dashboard | ⏳ not started |
 
 Team roles: Data Engineer (ETL + DW), ML Engineer (models + evaluation),
@@ -211,6 +211,10 @@ then re-run the ETL and confirm the report shows 0 leaks.
   DW (503 otherwise); `etl` reads `reports/etl/*.json`; `models` reads
   `reports/models/*.json` (sklearn metrics + majority baseline + top words) and
   `dw.vw_confusion_matrix`. **Only validation and test are served, never train.**
+  `warehouse` reads the live catalog (`information_schema`, `pg_class`): tables with row
+  counts, sizes, columns, PK/FK, views, last 10 `dim_etl_run` rows, prediction rows per
+  model × split. Table descriptions are in `TABLE_INFO` / `VIEW_INFO` in `insights.py`:
+  add an entry there when you add a table or view.
 - `GET /health` → model loaded? warehouse reachable?
 
 ### Baseline results and caveats (read before using or changing the models)

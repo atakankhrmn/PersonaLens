@@ -9,6 +9,7 @@ import {
   MbtiTypeDistributionRow,
   ModelPerformanceRow,
   TopFeatures,
+  WarehouseInfo,
 } from '../types/insights';
 
 async function tryFetchJson<T>(endpoint: string): Promise<T | null> {
@@ -171,5 +172,29 @@ export async function fetchModelPerformance(): Promise<InsightsDataState<ModelIn
     sourceAttribution: 'Awaiting trained model evaluation records in PostgreSQL',
     plannedEndpoint: 'GET /api/insights/models',
     warehouseSource: 'dw.dim_model · dw.fact_prediction · dw.vw_model_performance · dw.vw_confusion_matrix',
+  };
+}
+
+/**
+ * GET /api/insights/warehouse: tables, keys, row counts, views and ETL runs of the dw schema,
+ * read live from PostgreSQL by the Python API.
+ */
+export async function fetchWarehouse(): Promise<InsightsDataState<WarehouseInfo>> {
+  const remote = await tryFetchJson<WarehouseInfo>('/api/insights/warehouse');
+  if (remote && Array.isArray(remote.tables) && remote.tables.length > 0) {
+    return {
+      status: 'ready',
+      data: remote,
+      sourceAttribution: 'Live PostgreSQL catalog (information_schema, pg_class) + dw tables',
+      plannedEndpoint: 'GET /api/insights/warehouse',
+      warehouseSource: 'dw.*',
+    };
+  }
+  return {
+    status: 'unavailable',
+    data: null,
+    sourceAttribution: 'PostgreSQL data warehouse not reachable',
+    plannedEndpoint: 'GET /api/insights/warehouse',
+    warehouseSource: 'dw.*',
   };
 }

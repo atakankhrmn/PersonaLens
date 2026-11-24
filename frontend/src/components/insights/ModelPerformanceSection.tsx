@@ -112,7 +112,7 @@ export const ModelPerformanceSection: React.FC<ModelPerformanceSectionProps> = (
       <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
         <div className="space-y-1">
           <h2 id="model-performance-heading" className="font-display text-2xl font-bold text-[#1E2430]">
-            04. Model Performance
+            05. Model Performance
           </h2>
           <p className="text-sm text-[#525B6E]">
             Four binary classifiers (TF-IDF + Logistic Regression, compared with TF-IDF + Linear SVM), combined into the 16-type prediction.

@@ -8,7 +8,7 @@ Endpoints (contract in frontend/README.md):
 
 - ``GET  /health``                 model loaded? warehouse reachable?
 - ``POST /api/analyze``            ``{"texts": [...], "input_mode": "single"|"multiple"}``
-- ``GET  /api/insights/overview|types|dimensions|etl|models``
+- ``GET  /api/insights/overview|types|dimensions|etl|models|warehouse``
 
 Privacy: the submitted text is only held in memory for the prediction. If the warehouse is
 reachable, ``log_app_prediction`` records the predicted type, scores and post/word counts,
@@ -222,6 +222,11 @@ def insights_etl():
 @app.get("/api/insights/models")
 def insights_models():
     return _insight("models", lambda: insights.model_insights(warehouse.engine()))
+
+
+@app.get("/api/insights/warehouse")
+def insights_warehouse():
+    return _insight("warehouse", lambda: insights.warehouse(warehouse.engine()))
 
 
 @app.get("/api/insights/{name}")

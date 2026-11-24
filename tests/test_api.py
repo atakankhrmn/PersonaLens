@@ -97,7 +97,7 @@ def test_analyze_rejects_bad_input(client, payload):
 
 
 def test_insights_without_warehouse(client):
-    for name in ("overview", "types", "dimensions"):
+    for name in ("overview", "types", "dimensions", "warehouse"):
         r = client.get(f"/api/insights/{name}")
         assert r.status_code == 503 and r.json()["available"] is False
     assert client.get("/api/insights/nope").status_code == 404

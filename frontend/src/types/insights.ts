@@ -131,3 +131,39 @@ export interface InsightsDataState<T> {
   warehouseSource: string;
   errorMessage?: string;
 }
+
+/** GET /api/insights/warehouse: live description of the dw star schema. */
+export interface WarehouseColumn {
+  name: string;
+  type: string;
+  pk: boolean;
+  references: string | null;
+}
+
+export interface WarehouseTable {
+  name: string;
+  kind: 'fact' | 'dimension';
+  grain: string;
+  description: string;
+  rows: number;
+  bytes: number;
+  columns: WarehouseColumn[];
+}
+
+export interface WarehouseInfo {
+  schema: string;
+  engine: string;
+  databaseBytes: number;
+  tables: WarehouseTable[];
+  foreignKeys: { from_table: string; from_column: string; to_table: string }[];
+  views: { name: string; description: string }[];
+  etlRuns: {
+    run: number;
+    source: string;
+    status: string;
+    started_at: string | null;
+    seconds: number | null;
+    git_commit: string;
+  }[];
+  predictionRows: { model: string; split: string; rows: number }[];
+}

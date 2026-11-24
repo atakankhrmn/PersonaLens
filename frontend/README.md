@@ -44,6 +44,7 @@ Other scripts: `npm run lint` (TypeScript check), `npm run build` (production bu
 | `GET /api/insights/types` | – | one row per type × split: users, % of split, posts, words (DW) |
 | `GET /api/insights/dimensions` | – | `dw.vw_dimension_distribution` |
 | `GET /api/insights/etl` | – | `reports/etl/leakage_report_*.json` |
+| `GET /api/insights/warehouse` | – | live `dw` catalog: tables (rows, size, columns, PK/FK), views, ETL runs, prediction rows (Data Warehouse tab) |
 | `GET /api/insights/models` | – | validation/test metrics + majority baseline + top words (`reports/models/*.json`), confusion matrix (`dw.vw_confusion_matrix`); never train |
 
 `texts` are separate writing samples. The Python side cleans them with
