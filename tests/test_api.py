@@ -126,3 +126,9 @@ def test_model_insights_never_return_train(client):
 def test_model_insights_missing_reports(tmp_path):
     with pytest.raises(insights.DataUnavailable):
         insights.model_insights(None, report_dir=tmp_path)
+
+
+def test_model_insights_skip_other_reports(tmp_path):
+    (tmp_path / "external_reddit.json").write_text('{"dataset": "x", "metrics": {}}', encoding="utf-8")
+    with pytest.raises(insights.DataUnavailable):
+        insights.model_insights(None, report_dir=tmp_path)

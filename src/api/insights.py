@@ -146,6 +146,8 @@ def dimension_distribution(engine: Engine | None) -> list[dict]:
 # ---------------------------------------------------------------------------- models
 def _model_reports(report_dir: Path) -> list[dict]:
     reports = [json.loads(p.read_text(encoding="utf-8")) for p in sorted(report_dir.glob("*.json"))]
+    # only training reports of src.models.train (skips e.g. external_reddit.json)
+    reports = [r for r in reports if "model" in r and "version" in r and "metrics" in r]
     if not reports:
         raise DataUnavailable("No model reports found; run python -m src.models.train")
     return reports
