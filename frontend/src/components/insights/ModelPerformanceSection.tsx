@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { BarChart3, Info } from 'lucide-react';
 import { TECHNICAL_GLOSSARY } from '../../data/etlReports';
-import { PERSONALITY_TYPES } from '../../data/personalities';
+import { PERSONALITY_GROUPS, PERSONALITY_MAP, PERSONALITY_TYPES } from '../../data/personalities';
+import { MbtiCode } from '../../types/personality';
 import { ModelInsightsPayload } from '../../services/insights';
 import { DimensionKey, InsightsDataState, ModelPerformanceRow } from '../../types/insights';
 import { TermTooltip } from './TermTooltip';
@@ -103,6 +104,24 @@ export const ModelPerformanceSection: React.FC<ModelPerformanceSectionProps> = (
     }
     return { grid, rowTotals, total };
   }, [data, activeModel, selectedSplit]);
+
+  // Per-type precision / recall / F1 from the confusion matrix (same definition as
+  // dw.vw_model_type_metrics and scikit-learn: types never predicted get precision 0).
+  const perType = useMemo(() => {
+    if (!confusion) return null;
+    const rows = TYPE_ORDER.map((type) => {
+      const support = confusion.rowTotals.get(type) ?? 0;
+      const predicted = TYPE_ORDER.reduce((s, t) => s + (confusion.grid.get(`${t}|${type}`) ?? 0), 0);
+      const correct = confusion.grid.get(`${type}|${type}`) ?? 0;
+      const precision = predicted ? correct / predicted : 0;
+      const recall = support ? correct / support : 0;
+      const f1 = support + predicted ? (2 * correct) / (support + predicted) : 0;
+      return { type, support, predicted, correct, precision, recall, f1, inScope: support + predicted > 0 };
+    }).sort((a, b) => b.support - a.support);
+    const scoped = rows.filter((r) => r.inScope);
+    const macroF1 = scoped.reduce((s, r) => s + r.f1, 0) / (scoped.length || 1);
+    return { rows, macroF1 };
+  }, [confusion]);
 
   const topFeatures = activeId ? data?.topFeatures?.[activeId] : undefined;
 
@@ -380,6 +399,62 @@ export const ModelPerformanceSection: React.FC<ModelPerformanceSectionProps> = (
               </div>
             )}
           </div>
+
+          {/* Per-type precision / recall / F1 */}
+          {perType && (
+            <div className="rounded-3xl bg-white border border-black/[0.08] p-6 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-2">
+                <div>
+                  <h3 className="font-display text-lg font-bold text-[#1E2430]">Results per Type</h3>
+                  <p className="text-xs text-[#6B7280]">
+                    Precision = share of the model's answers for that type that were right · Recall = share of users of that type that were found · sorted by number of users
+                  </p>
+                </div>
+                <span className="font-mono text-[11px] text-[#6B7280]">dw.vw_confusion_matrix</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs tabular-nums">
+                  <thead>
+                    <tr className="text-left text-[#525B6E] border-b border-black/[0.06]">
+                      <th className="py-2 pr-3">Type</th>
+                      <th className="py-2 px-2 text-right">Users</th>
+                      <th className="py-2 px-2 text-right">Predicted</th>
+                      <th className="py-2 px-2 text-right">Correct</th>
+                      <th className="py-2 px-2 text-right">Precision</th>
+                      <th className="py-2 px-2 text-right">Recall</th>
+                      <th className="py-2 pl-2 w-[32%]">F1</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-black/[0.04]">
+                    {perType.rows.map((r) => {
+                      const group = PERSONALITY_GROUPS[PERSONALITY_MAP[r.type as MbtiCode].group];
+                      return (
+                        <tr key={r.type}>
+                          <td className="py-1.5 pr-3 font-mono font-bold" style={{ color: group.inkHex }}>{r.type}</td>
+                          <td className="py-1.5 px-2 text-right text-[#374151]">{r.support}</td>
+                          <td className="py-1.5 px-2 text-right text-[#374151]">{r.predicted}</td>
+                          <td className="py-1.5 px-2 text-right text-[#374151]">{r.correct}</td>
+                          <td className="py-1.5 px-2 text-right text-[#1E2430]">{pct(r.precision, 0)}</td>
+                          <td className="py-1.5 px-2 text-right text-[#1E2430]">{pct(r.recall, 0)}</td>
+                          <td className="py-1.5 pl-2">
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 h-2.5 rounded-full bg-[#F0EFEA] overflow-hidden">
+                                <div className="h-full rounded-full" style={{ width: `${r.f1 * 100}%`, backgroundColor: group.accentHex }} />
+                              </div>
+                              <span className="w-10 text-right font-semibold text-[#1E2430]">{dec(r.f1, 2)}</span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-[11px] text-[#6B7280] leading-relaxed">
+                16-type Macro-F1 = average F1 of these types = <span className="font-semibold text-[#1E2430]">{dec(perType.macroF1, 3)}</span>. Common types (INFP, INFJ, INTP) are found most often; rare E-S types are almost never predicted, which keeps the Macro-F1 low.
+              </p>
+            </div>
+          )}
 
           {/* Top words per letter */}
           {topFeatures && Object.keys(topFeatures).length > 0 && (
