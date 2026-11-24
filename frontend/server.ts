@@ -12,7 +12,12 @@ const __dirname = path.dirname(__filename);
 async function startServer() {
   const app = express();
   const PORT = 3000;
-  const pythonBackendUrl = process.env.PYTHON_API_URL?.replace(/\/+$/, '') || '';
+  // Python FastAPI backend (python -m src.api). Set PYTHON_API_URL=off to disable it.
+  const configuredUrl = (process.env.PYTHON_API_URL ?? '').trim();
+  const pythonBackendUrl =
+    configuredUrl.toLowerCase() === 'off'
+      ? ''
+      : (configuredUrl || 'http://127.0.0.1:8000').replace(/\/+$/, '');
 
   app.use(express.json({ limit: '1mb' }));
 
@@ -21,7 +26,7 @@ async function startServer() {
       res.json({
         ok: true,
         modelConnected: false,
-        message: 'Trained ML model is not connected yet.',
+        message: 'The Python prediction API is disabled (PYTHON_API_URL=off).',
       });
       return;
     }
@@ -39,21 +44,20 @@ async function startServer() {
       res.json({
         ok: true,
         modelConnected: false,
-        message: 'Configured Python FastAPI backend is not reachable.',
+        message: `Python API not reachable at ${pythonBackendUrl}. Start it with "python -m src.api".`,
       });
     }
   });
 
   /**
-   * Proposed future Data Warehouse / BI Insights endpoints:
-   * GET /api/insights/{overview,types,dimensions,etl,models}
-   * Proxies to PYTHON_API_URL when configured; otherwise returns 501 JSON.
+   * Data Warehouse / BI insights: GET /api/insights/{overview,types,dimensions,etl,models}
+   * Proxied to the Python API (src/api/insights.py).
    */
   app.use('/api/insights', async (req, res) => {
     if (!pythonBackendUrl) {
       res.status(501).json({
         available: false,
-        message: 'Insights API endpoint is not implemented yet.',
+        message: 'The Python API is disabled (PYTHON_API_URL=off).',
       });
       return;
     }
@@ -61,7 +65,7 @@ async function startServer() {
     try {
       const upstream = await fetch(`${pythonBackendUrl}/api/insights${req.path}`, {
         method: 'GET',
-        signal: AbortSignal.timeout(5000),
+        signal: AbortSignal.timeout(15000),
       });
       const data = await upstream.json().catch(() => null);
       res.status(upstream.status).json(
@@ -76,7 +80,7 @@ async function startServer() {
   });
 
   /**
-   * Proxy route for future Python FastAPI ML inference service.
+   * Proxy route for the Python FastAPI inference service (src/api/app.py).
    * Accepts `{ texts: string[], input_mode?: "single" | "multiple" }` (or legacy `{ text: string }`)
    * and forwards separate writing samples untouched so Python can run `clean_posts`.
    */
@@ -115,8 +119,7 @@ async function startServer() {
       res.status(503).json({
         code: 'MODEL_NOT_CONNECTED',
         connected: false,
-        message:
-          'Model not connected yet. The trained scikit-learn backend is not connected on this branch.',
+        message: 'The Python prediction API is disabled (PYTHON_API_URL=off).',
       });
       return;
     }
@@ -148,7 +151,7 @@ async function startServer() {
         code: 'MODEL_NOT_CONNECTED',
         connected: false,
         message:
-          'Model not connected yet. Could not reach the Python FastAPI prediction service.',
+          'Could not reach the Python prediction API. Start it from the repository root with "python -m src.api".',
       });
     }
   });

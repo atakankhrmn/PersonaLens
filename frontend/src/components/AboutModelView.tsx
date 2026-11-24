@@ -18,12 +18,16 @@ Response (JSON):
 {
   "predicted_type": "INTP",
   "scores": {
-    "EI": 0.21,  // Probability of E (I=0, E=1)
-    "NS": 0.88,  // Probability of N (S=0, N=1)
-    "FT": 0.74,  // Probability of T (F=0, T=1)
-    "JP": 0.32   // Probability of J (P=0, J=1)
+    "EI": 0.21,  // score of E (I=0, E=1); > 0.5 = E
+    "NS": 0.88,  // score of N (S=0, N=1)
+    "FT": 0.74,  // score of T (F=0, T=1)
+    "JP": 0.32   // score of J (P=0, J=1)
   },
-  "model_version": "tfidf_logreg_v1"
+  "model_version": "tfidf_logreg v1",
+  "n_words": 512,        // words left after cleaning
+  "n_posts": 2,
+  "enough_text": true,   // false below 300 words
+  "min_words": 300
 }`;
 
 interface AboutModelViewProps {
@@ -61,7 +65,7 @@ export const AboutModelView: React.FC<AboutModelViewProps> = ({ onGoToAnalyze })
             Four Binary Classifiers & Scoring Convention
           </h2>
           <p className="text-sm text-[#525B6E] leading-relaxed">
-            Both Single Text and Multiple Posts modes invoke the same four binary classifiers and combine their outputs into a four-letter MBTI prediction.
+            Both Single Text and Multiple Posts modes invoke the same four binary classifiers (TF-IDF word 1–2-grams + Logistic Regression, <span className="font-mono">class_weight="balanced"</span>) and combine their outputs into a four-letter MBTI prediction. Each score is above 0.5 when the text leans towards the second letter. Because the classifiers are trained class-balanced, scores show direction and strength, not real-world probabilities.
           </p>
         </div>
 
@@ -72,16 +76,16 @@ export const AboutModelView: React.FC<AboutModelViewProps> = ({ onGoToAnalyze })
               Introverted (I) vs. Extraverted (E)
             </h3>
             <p className="text-sm text-[#4B5364] leading-relaxed">
-              The <span className="font-mono">EI</span> score reports the predicted probability of Extraversion (<span className="font-mono">E</span>) between 0.0 and 1.0.
+              The <span className="font-mono">EI</span> score is between 0.0 and 1.0; above 0.5 the text leans towards Extraversion (<span className="font-mono">E</span>).
             </p>
           </div>
           <div className="p-5 rounded-2xl bg-[#FAF9F6] border border-black/[0.05] space-y-1.5">
             <div className="font-mono text-xs font-semibold text-[#33A474]">NS · S=0 / N=1</div>
             <h3 className="font-display text-lg font-bold text-[#1E2430]">
-              Observant (S) vs. Intuitive (N)
+              Sensing (S) vs. Intuitive (N)
             </h3>
             <p className="text-sm text-[#4B5364] leading-relaxed">
-              The <span className="font-mono">NS</span> score reports the predicted probability of Intuition (<span className="font-mono">N</span>) between 0.0 and 1.0.
+              The <span className="font-mono">NS</span> score is between 0.0 and 1.0; above 0.5 the text leans towards Intuition (<span className="font-mono">N</span>).
             </p>
           </div>
           <div className="p-5 rounded-2xl bg-[#FAF9F6] border border-black/[0.05] space-y-1.5">
@@ -90,16 +94,16 @@ export const AboutModelView: React.FC<AboutModelViewProps> = ({ onGoToAnalyze })
               Feeling (F) vs. Thinking (T)
             </h3>
             <p className="text-sm text-[#4B5364] leading-relaxed">
-              The <span className="font-mono">FT</span> score reports the predicted probability of Thinking (<span className="font-mono">T</span>) between 0.0 and 1.0.
+              The <span className="font-mono">FT</span> score is between 0.0 and 1.0; above 0.5 the text leans towards Thinking (<span className="font-mono">T</span>).
             </p>
           </div>
           <div className="p-5 rounded-2xl bg-[#FAF9F6] border border-black/[0.05] space-y-1.5">
             <div className="font-mono text-xs font-semibold text-[#BD881D]">JP · P=0 / J=1</div>
             <h3 className="font-display text-lg font-bold text-[#1E2430]">
-              Prospecting (P) vs. Judging (J)
+              Perceiving (P) vs. Judging (J)
             </h3>
             <p className="text-sm text-[#4B5364] leading-relaxed">
-              The <span className="font-mono">JP</span> score reports the predicted probability of Judging (<span className="font-mono">J</span>) between 0.0 and 1.0.
+              The <span className="font-mono">JP</span> score is between 0.0 and 1.0; above 0.5 the text leans towards Judging (<span className="font-mono">J</span>).
             </p>
           </div>
         </div>
@@ -117,7 +121,7 @@ export const AboutModelView: React.FC<AboutModelViewProps> = ({ onGoToAnalyze })
           </p>
           <p>
             <strong className="text-[#1E2430]">Zero User Text Storage:</strong>{' '}
-            Following <span className="font-mono text-[#205B70]">src.dw.predictions.log_app_prediction</span>, only predicted type labels, dimension probabilities, and post/word counts are logged to PostgreSQL—submitted text is never stored.
+            Following <span className="font-mono text-[#205B70]">src.dw.predictions.log_app_prediction</span>, only predicted type labels, the four axis scores, and post/word counts are logged to PostgreSQL—submitted text is never stored.
           </p>
           <p>
             <strong className="text-[#1E2430]">Experimental Disclaimer:</strong>{' '}
@@ -160,7 +164,10 @@ export const AboutModelView: React.FC<AboutModelViewProps> = ({ onGoToAnalyze })
             FastAPI Integration Contract
           </h2>
           <p className="text-sm text-[#4B5364] leading-relaxed">
-            The trained scikit-learn models are not yet connected on the <span className="font-mono">main</span> branch. Once the Python FastAPI service is running, configure <span className="font-mono">PYTHON_API_URL</span> to connect <span className="font-mono">POST /api/analyze</span> using the list-based contract below.
+            The trained model is served by the Python FastAPI backend (<span className="font-mono">python -m src.api</span>, port 8000). The web server proxies <span className="font-mono">POST /api/analyze</span> to it via <span className="font-mono">PYTHON_API_URL</span> using the list-based contract below.
+          </p>
+          <p className="text-sm text-[#4B5364] leading-relaxed">
+            Held-out test results of this model (Macro-F1): E/I 0.66, N/S 0.60, T/F 0.79, J/P 0.63; exact 4-letter match 36.9% vs. 21.2% for always guessing the most common type. See Data Insights → Model Performance for details.
           </p>
         </div>
 

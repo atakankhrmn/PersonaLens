@@ -45,11 +45,13 @@ export interface PersonalityTypeInfo {
 /**
  * Repository scoring convention (src/dw/predictions.py & AGENTS.md):
  * Binary labels: I=0/E=1, S=0/N=1, F=0/T=1, P=0/J=1.
- * Each score is a probability in [0, 1] for the positive letter:
- *   - EI: probability of E (Extraverted)
- *   - NS: probability of N (Intuitive)
- *   - FT: probability of T (Thinking)
- *   - JP: probability of J (Judging)
+ * Each score is a model score in [0, 1] for the positive letter (> 0.5 = that letter):
+ *   - EI: score of E (Extraverted)
+ *   - NS: score of N (Intuitive)
+ *   - FT: score of T (Thinking)
+ *   - JP: score of J (Judging)
+ * The model is trained with class_weight="balanced", so these are NOT real-world
+ * probabilities (AGENTS.md caveat 6): show them as "leans towards", never as "% chance".
  */
 export interface MbtiDimensionScores {
   EI: number;
@@ -77,6 +79,12 @@ export interface AnalyzeApiResponse {
   predicted_type: MbtiCode;
   scores?: Partial<MbtiDimensionScores> | null;
   model_version?: string | null;
+  /** Words left after the same cleaning as the training data. */
+  n_words?: number;
+  n_posts?: number;
+  /** False below MIN_WORDS (300): the UI must show the "not enough text" warning. */
+  enough_text?: boolean;
+  min_words?: number;
 }
 
 /**
@@ -90,6 +98,9 @@ export interface PredictionResult {
   modelVersion: string | null;
   analyzedPostCount: number;
   analyzedWordCount: number;
+  /** null when the backend did not say (older API). */
+  enoughText: boolean | null;
+  minWords: number;
 }
 
 export interface AnalyzeErrorResponse {

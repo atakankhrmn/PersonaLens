@@ -26,7 +26,9 @@ the app must show cautious wording and a "not enough text" warning.
 | Project skeleton, requirements, data loader | ✅ done |
 | EDA notebook (`notebooks/01_eda.ipynb`) | ✅ done |
 | Cleaning / leakage ETL (`src/etl/`) + 70 tests | ✅ done |
-| Baseline models (4 binary classifiers) | ⏳ next — team will do it together |
+| Baseline models (4 binary classifiers) | ✅ done — `src/models/` (train, evaluate, predict), `reports/models/`; **final test** Macro-F1 LogReg: EI 0.66, NS 0.60, FT 0.79, JP 0.63, 16-type 0.20 (majority 0.02), exact match 36.9% (majority 21.2%); SVM ≈ same; all splits' predictions in DW, 11 tests. Test split now used — see "Baseline results and caveats" |
+| Out-of-domain check (Reddit) | ✅ done — `src/models/eval_external.py`, `reports/models/external_reddit.json`: 9,150 Reddit users (HF `minhaozhang/mbti` test split). LogReg Macro-F1 EI 0.51, NS 0.53, FT 0.59, JP 0.51, 16-type 0.08 (baseline 0.03); exact match 23.5% < always-INFP 29.2%; predicts INTP for 51% of users. See caveat 9 |
+| Model improvements (v2) | ⏳ planned, not started — ideas listed in "Improvement backlog" below |
 | PostgreSQL star schema + DW load | ✅ done — `src/dw/` (schema.sql, load_dw.py, predictions.py), main source (label_clean) posts + quality metrics of all 3 configs, 16 tests |
 | Streamlit app | ⏳ not started |
 | Web frontend (`frontend/`, React + Vite + Express proxy) | 🚧 in progress — UI, "not enough text" warning (< 300 words) and Data Insights page done; `npm install` / `bun install` and build work; waits for a Python inference API (`PYTHON_API_URL`, contract in `frontend/README.md`). Team still has to choose Streamlit vs this frontend |
@@ -59,6 +61,8 @@ python -m pytest                                  # run tests (must stay green)
 python -m src.etl.clean_leakage                   # build main training data (~2–4 min)
 python -m src.etl.clean_leakage --config all      # all three configs (quality reports)
 python -m src.dw.load_dw                          # load warehouse (~30 s)
+python -m src.api                                 # Python API on http://127.0.0.1:8000
+cd frontend; npm install; npm run dev             # web app on http://localhost:3000
 ```
 
 Always use the project `.venv` interpreter. In VS Code the Jupyter extension is required
@@ -139,8 +143,9 @@ train = df[df["split"] == "train"]
 
 ## Cleaning (src/etl/cleaning.py)
 
-`clean_text(text)` is the single entry point. **The Streamlit app must call the same
-`clean_text` on user input**, otherwise train and inference text differ.
+`clean_text(text)` is the single entry point. **The app must clean user input the same
+way** (`src.models.predict.predict` runs `clean_posts`, which uses `clean_text`), otherwise
+train and inference text differ.
 
 It fixes encoding artefacts (`isnx92t` → `isn't`, `x93`/`x94` → quotes, `x95` bullets,
 `u200b`) and masks typology vocabulary:
@@ -176,23 +181,148 @@ then re-run the ETL and confirm the report shows 0 leaks.
   majority-class baseline.
 - TF-IDF default tokenisation turns `<MBTI_TYPE>` into the token `mbti_type`; that is fine
   (it is identical for every type).
-- Save models under `models/` (git-ignored) with joblib. Planned app contract:
-  `predict(texts: list[str]) -> {"type": "INTP", "scores": {"EI": ..., "NS": ..., "FT": ..., "JP": ...}}`.
+- Labels: the 0/1 targets are the `*_label` columns (`EI_label` …); `EI` itself holds the letter.
+
+### Baseline code (src/models/)
+
+- `python -m src.models.train [--model logreg|svm|all] [--version v1] [--no-dw] [--final-test]`
+  (~a few minutes). Fits ONE TF-IDF (word 1–2-grams, `min_df=3`, `max_df=0.9`,
+  200k features, sublinear tf) on train users only, then per dimension tunes `C` on
+  validation Macro-F1 (`C_GRID` in `train.py`), saves `models/tfidf_<algo>.joblib`, the
+  report `reports/models/tfidf_<algo>_<version>.json` (metrics, chosen C, majority
+  baseline, top words per letter) and writes train+validation predictions to the DW via
+  `register_model` / `write_predictions` (skipped with a message if PostgreSQL is down).
+- `--final-test` also scores the test split. Use it **once**, for the final paper numbers.
+- `model.py` — `PersonaModel` (vectoriser + 4 classifiers, `scores_from_matrix`,
+  `predict_cleaned`, `top_features`, `save`/`load`). Scores are P(E), P(N), P(T), P(J);
+  > 0.5 means that letter. LinearSVC has no probabilities: its score is a sigmoid of the
+  decision value (uncalibrated, but on the same 0.5 threshold).
+- `evaluate.py` — `evaluate`, `majority_baseline`, `letters_to_type`, `format_table`.
+- `predict.py` — app contract:
+  `predict(texts) -> {"type", "scores": {"EI","NS","FT","JP"}, "n_words", "n_posts",
+  "enough_text", "model", "model_name", "model_version"}`.
+  `texts` = posts of one person; runs `clean_posts` on them first (same as the training
+  data: `clean_text`, then empty / placeholder-only / duplicate posts dropped); `n_words`
+  counts the cleaned words; `enough_text` is False below `MIN_WORDS` (300) and the app
+  must then show the "not enough text" warning. Default model: `models/tfidf_logreg.joblib`.
+
+### Python API (src/api/)
+
+- `python -m src.api [--port 8000] [--reload]` — FastAPI app in `app.py`, used by the web
+  frontend through its Express proxy (`frontend/server.ts`, `PYTHON_API_URL`).
+- `POST /api/analyze` `{"texts": [...], "input_mode": "single"|"multiple"}` →
+  `{"predicted_type", "scores", "model_version", "n_words", "n_posts", "enough_text",
+  "min_words", "logged_to_dw"}`. 400 `INVALID_INPUT` for empty input, > 50,000 characters,
+  > 200 posts, or nothing left after masking. If PostgreSQL is reachable the prediction is
+  logged with `log_app_prediction` (scores mapped `EI→score_e` … `JP→score_j`); the text is
+  never stored or logged. `PERSONALENS_NO_DW=1` turns the warehouse off (used in tests).
+- `GET /api/insights/*` (`insights.py`, cached 5 min): `overview`, `types` (type × split
+  with posts/words of the main source), `dimensions` (`vw_dimension_distribution`) need the
+  DW (503 otherwise); `etl` reads `reports/etl/*.json`; `models` reads
+  `reports/models/*.json` (sklearn metrics + majority baseline + top words) and
+  `dw.vw_confusion_matrix`. **Only validation and test are served, never train.**
+  `warehouse` reads the live catalog (`information_schema`, `pg_class`): tables with row
+  counts, sizes, columns, PK/FK, views, last 10 `dim_etl_run` rows, prediction rows per
+  model × split. Table descriptions are in `TABLE_INFO` / `VIEW_INFO` in `insights.py`:
+  add an entry there when you add a table or view.
+- `GET /health` → model loaded? warehouse reachable?
+
+### Baseline results and caveats (read before using or changing the models)
+
+Final **test** results of v1 (Macro-F1; `--final-test` run on 2026-11-21; validation in brackets):
+
+| Model | E/I | N/S | T/F | J/P | 16 types | exact match |
+|---|---|---|---|---|---|---|
+| Majority baseline (always INFP) | 0.44 | 0.46 | 0.35 | 0.38 | 0.02 | 21.2% |
+| TF-IDF + LogReg | 0.655 (0.642) | 0.598 (0.615) | 0.788 (0.805) | 0.628 (0.633) | 0.201 (0.193) | 36.9% |
+| TF-IDF + LinearSVC | 0.656 (0.642) | 0.598 (0.615) | 0.790 (0.802) | 0.626 (0.635) | 0.197 (0.193) | 36.7% |
+
+Test ≈ validation, so the tuning did not overfit validation. Average 3.06 of 4 letters right
+(majority baseline: 2.78).
+
+1. **The test split is now used.** Never tune or pick a model by looking at test numbers.
+   A new model (v2, BERT …) is tuned on validation only and gets ONE `--final-test` run at
+   the end; all compared models must be reported on the same test split.
+2. **Re-running `train` without `--final-test` overwrites `reports/models/*_v1.json` and
+   drops the test metrics.** For experiments use a new `--version` (e.g. `--version v2`),
+   or re-run v1 with `--final-test` (results are deterministic: same C, same numbers).
+3. **Train-split predictions are in-sample** (train exact match 96% vs 35% on validation).
+   The DW holds predictions for all three splits; dashboard/report performance figures
+   must filter `split IN ('validation', 'test')`, never mix in `train`.
+4. **Masking placeholders are among the top features** (e.g. `typology_term`,
+   `mbti_type are`, `dear mbti_type`, `mbti_term` push towards E and S). Not direct
+   leakage (the token is identical for every type) but an indirect "talks about types"
+   signal. Planned ablation for the paper: drop the placeholder tokens and compare.
+5. **N/S is the weakest axis**: best C is at the low end of the grid (0.01 LogReg,
+   0.001 SVM) with tiny gains (0.609 → 0.615). The signal is weak; more C tuning won't help.
+6. **Scores are not real-world probabilities.** `class_weight="balanced"` trains as if
+   both letters were equally common, and the SVM score is an uncalibrated sigmoid. The
+   app must not say "73% chance you are E"; use wording like "leans towards E".
+7. **Domain and length:** trained on long PersonalityCafe forum histories (~1,300 words
+   per user). Short or non-forum text (tweets, one paragraph) is out of domain; keep the
+   `enough_text` warning. Labels are self-reported MBTI, not a diagnosis.
+8. Models are fit on train only (no refit on train+validation); top words per letter are
+   in the report JSONs (`top_features`), useful for the paper's interpretation section.
+9. **The model transfers poorly to other platforms.** On 9,150 Reddit users
+   (`python -m src.models.eval_external`, data: HF `minhaozhang/mbti` test split, ~284 MB in
+   `data/raw/external/reddit_mbti/`, no dataset card, GPL-2.0 tag, provenance unclear — check
+   before citing) Macro-F1 drops to EI 0.51, NS 0.53, FT 0.59, JP 0.51 (PersonalityCafe test:
+   0.66 / 0.60 / 0.79 / 0.63). It still beats the majority baseline on every axis and on
+   16-type Macro-F1 (0.079 vs 0.028), but exact match (23.5%) is below always-INFP (29.2%),
+   because it predicts INTP for 51% of users (true 14%): Reddit's argumentative, sweary
+   style hits the T words (`shit`, `fucking`, `stupid`, `argument`). T/F transfers best.
+   31.6% of Reddit users write their own type; cleaning masks all of it (0.0% after).
+   Most other HF "MBTI" datasets are copies of the Kaggle/PersonalityCafe data (same 8,675
+   users, including our train users): never use them as an external test.
+
+### Improvement backlog (not started — team will revisit)
+
+Realistic expectation: a few points (≈ +0.02–0.05 Macro-F1); labels are self-reported and
+noisy. Every idea is compared on **validation only**; the chosen version gets one
+`--version v2 --final-test` run. Planned order: v2 = ideas 1–4 together (measure each one's
+contribution on validation), then 6 if time allows, BERT (8) last.
+
+**Easy (hours, current code):**
+1. **Per-axis decision threshold** tuned on validation instead of 0.5 (test recall is only
+   41% for E and 21% for S). Cheapest gain for minority letters.
+2. **Character n-grams** (e.g. `char_wb` 2–5) next to word n-grams: captures style such as
+   `:)`, `xD`, `...`, `!!!`, capitalisation.
+3. **Stylistic features**: post length, links per post, `?`/`!` rate, first-person
+   (`I/me/my`) vs `we/you` rate, etc. Easy to interpret in the paper.
+4. **Refit on train + validation** after choosing hyper-parameters (+33% data).
+5. **Tune TF-IDF too** (`max_features`, `ngram_range`, `min_df`), not only `C`.
+
+**Medium (1–2 days):**
+6. **Sentence embeddings** (e.g. `sentence-transformers/all-MiniLM-L6-v2`, no fine-tuning;
+   average post embeddings per user) + LogReg, alone and combined with TF-IDF. CPU is fine
+   but embedding ~400k posts takes about an hour; cache the vectors.
+7. **Smarter 16-type decision**: score all 16 types from the four probabilities (optionally
+   with priors) instead of picking letters independently; v1 never got ESTJ/ESFJ/ESFP right.
+
+**Hard (only if time allows):**
+8. **Fine-tune BERT/RoBERTa**: needs a GPU (Colab); 512-token limit vs ~1,300 words per
+   user → chunk and average. On this data usually only a few points over TF-IDF.
+
+**For the paper (credibility, not accuracy):**
+9. **Bootstrap confidence intervals** on test metrics, to show whether model differences are real.
+10. **Placeholder ablation** (caveat 4): drop `mbti_type`/`typology_term`/… tokens and compare.
 
 ## Repo layout
 
 ```
-app/               Streamlit app (empty)
+app/               Streamlit app (empty, not used; the web frontend is the app)
 frontend/          React + Vite UI, Express proxy to the Python API (see frontend/README.md)
 data/raw/          HF downloads (ignored)      data/processed/  ETL output (ignored)
 models/            trained models (ignored)
 dashboard/         Power BI report PersonaLens.pbix + README (pages, refresh steps)
 notebooks/         01_eda.ipynb
 reports/etl/       ETL data-quality reports     reports/figures/ EDA charts
+reports/models/    model reports (metrics, chosen C, top words)
 src/data_loader.py load_mbti(), load_clean()
 src/etl/           cleaning.py (rules), clean_leakage.py (ETL step)
 src/dw/            schema.sql, db.py (engine/.env), load_dw.py (DW load), predictions.py
-src/models/        training / evaluation code (empty)
+src/models/        model.py, train.py, evaluate.py, predict.py
+src/api/           FastAPI backend: app.py (analyze + insights routes), insights.py
 tests/             pytest
 ```
 

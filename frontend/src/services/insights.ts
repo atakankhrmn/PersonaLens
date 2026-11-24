@@ -8,6 +8,8 @@ import {
   InsightsDataState,
   MbtiTypeDistributionRow,
   ModelPerformanceRow,
+  TopFeatures,
+  WarehouseInfo,
 } from '../types/insights';
 
 async function tryFetchJson<T>(endpoint: string): Promise<T | null> {
@@ -36,7 +38,7 @@ export async function fetchDatasetOverview(): Promise<InsightsDataState<DatasetO
     return {
       status: 'ready',
       data: remote,
-      sourceAttribution: 'Live Data Warehouse API (dw.dim_user, dw.fact_post)',
+      sourceAttribution: 'Live PostgreSQL warehouse (dw.dim_user, dw.fact_post)',
       plannedEndpoint: 'GET /api/insights/overview',
       warehouseSource: 'dw.dim_user · dw.fact_post · dw.vw_data_quality_latest',
     };
@@ -64,7 +66,7 @@ export async function fetchEtlReports(): Promise<
     return {
       status: 'ready',
       data: remote,
-      sourceAttribution: 'Live Data Warehouse API (dw.vw_data_quality_latest)',
+      sourceAttribution: 'Live API: reports/etl/leakage_report_{raw,label_clean,psychometric_clean}.json',
       plannedEndpoint: 'GET /api/insights/etl',
       warehouseSource: 'dw.fact_data_quality · dw.vw_data_quality_latest',
     };
@@ -136,7 +138,10 @@ export async function fetchDimensionDistribution(): Promise<
 
 export interface ModelInsightsPayload {
   models: ModelPerformanceRow[];
+  /** Majority-class baseline (always the most common training type) per split. */
+  baselines: ModelPerformanceRow[];
   confusionMatrix: ConfusionMatrixCell[];
+  topFeatures: TopFeatures;
 }
 
 /**
@@ -148,9 +153,14 @@ export async function fetchModelPerformance(): Promise<InsightsDataState<ModelIn
   if (remote && Array.isArray(remote.models) && remote.models.length > 0) {
     return {
       status: 'ready',
-      data: remote,
+      data: {
+        models: remote.models,
+        baselines: Array.isArray(remote.baselines) ? remote.baselines : [],
+        confusionMatrix: Array.isArray(remote.confusionMatrix) ? remote.confusionMatrix : [],
+        topFeatures: remote.topFeatures || {},
+      },
       sourceAttribution:
-        'PostgreSQL Data Warehouse (dw.dim_model, dw.vw_model_performance, dw.vw_confusion_matrix)',
+        'Model reports (reports/models/*.json, scikit-learn metrics) + PostgreSQL dw.vw_confusion_matrix',
       plannedEndpoint: 'GET /api/insights/models',
       warehouseSource: 'dw.dim_model · dw.fact_prediction · dw.vw_model_performance · dw.vw_confusion_matrix',
     };
@@ -162,5 +172,29 @@ export async function fetchModelPerformance(): Promise<InsightsDataState<ModelIn
     sourceAttribution: 'Awaiting trained model evaluation records in PostgreSQL',
     plannedEndpoint: 'GET /api/insights/models',
     warehouseSource: 'dw.dim_model · dw.fact_prediction · dw.vw_model_performance · dw.vw_confusion_matrix',
+  };
+}
+
+/**
+ * GET /api/insights/warehouse: tables, keys, row counts, views and ETL runs of the dw schema,
+ * read live from PostgreSQL by the Python API.
+ */
+export async function fetchWarehouse(): Promise<InsightsDataState<WarehouseInfo>> {
+  const remote = await tryFetchJson<WarehouseInfo>('/api/insights/warehouse');
+  if (remote && Array.isArray(remote.tables) && remote.tables.length > 0) {
+    return {
+      status: 'ready',
+      data: remote,
+      sourceAttribution: 'Live PostgreSQL catalog (information_schema, pg_class) + dw tables',
+      plannedEndpoint: 'GET /api/insights/warehouse',
+      warehouseSource: 'dw.*',
+    };
+  }
+  return {
+    status: 'unavailable',
+    data: null,
+    sourceAttribution: 'PostgreSQL data warehouse not reachable',
+    plannedEndpoint: 'GET /api/insights/warehouse',
+    warehouseSource: 'dw.*',
   };
 }

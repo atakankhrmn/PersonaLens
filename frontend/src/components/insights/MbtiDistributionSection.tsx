@@ -19,6 +19,13 @@ import {
 } from '../../types/insights';
 import { MbtiCode, PersonalityGroupId } from '../../types/personality';
 
+const DIMENSION_COLORS: Record<string, string> = {
+  'E/I': '#88619A',
+  'N/S': '#33A474',
+  'F/T': '#4298B4',
+  'J/P': '#D99B26',
+};
+
 interface MbtiDistributionSectionProps {
   typesState: InsightsDataState<MbtiTypeDistributionRow[]>;
   dimensionsState: InsightsDataState<DimensionDistributionRow[]>;
@@ -57,15 +64,36 @@ export const MbtiDistributionSection: React.FC<MbtiDistributionSectionProps> = (
   const [typeFilter, setTypeFilter] = useState<'all' | MbtiCode>('all');
   const [splitFilter, setSplitFilter] = useState<DatasetSplit>('all');
 
+  // The API returns one row per type x split; sum the splits into one row per type
+  // so every chart shows exactly one bar per type.
   const filteredTypeRows = useMemo(() => {
     if (!typesState.data) return [];
-    return typesState.data.filter((row) => {
+    const matching = typesState.data.filter((row) => {
       if (groupFilter !== 'all' && row.temperament !== groupFilter) return false;
       if (typeFilter !== 'all' && row.type_code !== typeFilter) return false;
       if (splitFilter !== 'all' && row.split && row.split !== splitFilter) return false;
       return true;
     });
+    const byType = new Map<MbtiCode, MbtiTypeDistributionRow>();
+    for (const row of matching) {
+      const prev = byType.get(row.type_code);
+      if (!prev) {
+        byType.set(row.type_code, { ...row, posts: row.posts ?? 0, words: row.words ?? 0 });
+      } else {
+        prev.users += row.users;
+        prev.posts = (prev.posts ?? 0) + (row.posts ?? 0);
+        prev.words = (prev.words ?? 0) + (row.words ?? 0);
+      }
+    }
+    const rows = [...byType.values()].map((r) => ({
+      ...r,
+      posts_per_user: r.users ? Math.round(((r.posts ?? 0) / r.users) * 10) / 10 : 0,
+      avg_words_per_post: r.posts ? Math.round(((r.words ?? 0) / r.posts) * 10) / 10 : 0,
+    }));
+    return rows.sort((a, b) => b.users - a.users);
   }, [typesState.data, groupFilter, typeFilter, splitFilter]);
+
+  const totalFilteredUsers = filteredTypeRows.reduce((sum, r) => sum + r.users, 0);
 
   const groupSummaryRows = useMemo(() => {
     if (filteredTypeRows.length === 0) return [];
@@ -197,9 +225,17 @@ export const MbtiDistributionSection: React.FC<MbtiDistributionSectionProps> = (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={filteredTypeRows} margin={{ top: 10, right: 12, left: 0, bottom: 8 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" vertical={false} />
-                  <XAxis dataKey="type_code" tick={{ fontSize: 11, fill: '#4B5364' }} />
+                  <XAxis dataKey="type_code" interval={0} angle={-45} textAnchor="end" height={44} tick={{ fontSize: 10, fill: '#4B5364' }} />
                   <YAxis tick={{ fontSize: 11, fill: '#4B5364' }} />
-                  <Tooltip />
+                  <Tooltip
+                    formatter={(raw) => {
+                      const value = Number(raw ?? 0);
+                      return [
+                      `${value.toLocaleString('en-US')} users (${totalFilteredUsers ? ((value / totalFilteredUsers) * 100).toFixed(1) : 0}%)`,
+                      'Users',
+                    ];
+                    }}
+                  />
                   <Bar dataKey="users" name="Users" radius={[6, 6, 0, 0]}>
                     {filteredTypeRows.map((entry) => (
                       <Cell
@@ -229,7 +265,7 @@ export const MbtiDistributionSection: React.FC<MbtiDistributionSectionProps> = (
                 Four MBTI Dimension Distributions
               </h3>
               <p className="text-xs text-[#6B7280]">
-                Class balance across E/I, N/S, F/T, and J/P poles
+                Class balance across E/I, N/S, F/T, and J/P poles (all 8,675 users)
               </p>
             </div>
             <span className="font-mono text-[11px] text-[#6B7280]">
@@ -247,8 +283,24 @@ export const MbtiDistributionSection: React.FC<MbtiDistributionSectionProps> = (
                   <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" vertical={false} />
                   <XAxis dataKey="letter" tick={{ fontSize: 12, fill: '#4B5364' }} />
                   <YAxis tick={{ fontSize: 11, fill: '#4B5364' }} />
-                  <Tooltip />
-                  <Bar dataKey="users" name="Users" fill="#33A474" radius={[6, 6, 0, 0]} />
+                  <Tooltip
+                    formatter={(raw, _name, item) => {
+                      const value = Number(raw ?? 0);
+                      const row = item?.payload as DimensionDistributionRow | undefined;
+                      return [
+                      `${value.toLocaleString('en-US')} users (${row?.pct ?? '—'}% of ${row?.dimension ?? ''})`,
+                      'Users',
+                    ];
+                    }}
+                  />
+                  <Bar dataKey="users" name="Users" radius={[6, 6, 0, 0]}>
+                    {dimensionsState.data!.map((entry) => (
+                      <Cell
+                        key={`${entry.dimension}-${entry.letter}`}
+                        fill={DIMENSION_COLORS[entry.dimension] || '#33A474'}
+                      />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -323,9 +375,18 @@ export const MbtiDistributionSection: React.FC<MbtiDistributionSectionProps> = (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={filteredTypeRows} margin={{ top: 10, right: 12, left: 0, bottom: 8 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" vertical={false} />
-                  <XAxis dataKey="type_code" tick={{ fontSize: 11, fill: '#4B5364' }} />
+                  <XAxis dataKey="type_code" interval={0} angle={-45} textAnchor="end" height={44} tick={{ fontSize: 10, fill: '#4B5364' }} />
                   <YAxis tick={{ fontSize: 11, fill: '#4B5364' }} />
-                  <Tooltip />
+                  <Tooltip
+                    formatter={(raw, _name, item) => {
+                      const value = Number(raw ?? 0);
+                      const row = item?.payload as MbtiTypeDistributionRow | undefined;
+                      return [
+                      `${value.toLocaleString('en-US')} posts · ${row?.posts_per_user ?? '—'} per user · ${row?.avg_words_per_post ?? '—'} words/post`,
+                      'Cleaned posts',
+                    ];
+                    }}
+                  />
                   <Bar dataKey="posts" name="Cleaned Posts" fill="#88619A" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
